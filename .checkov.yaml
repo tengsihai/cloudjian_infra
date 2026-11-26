@@ -46,3 +46,8 @@ skip-check:
   - CKV_AWS_309
   # 访问日志组不做 KMS：与 S3 同口径（方案 12.8 成本模型未含 KMS；CKV_AWS_145 已同因跳过）
   - CKV_AWS_158
+
+  # —— SSM（P-07）——
+  # 架构 10.2：参数总线不存业务数据/机密（桶名、域名、ID、ARN）；用 Standard 免费类型，
+  # 不上 SecureString（免 KMS 管理面与费用，与 SSE-S3 同成本口径，方案 12.2/12.8）
+  - CKV2_AWS_34

@@ -20,7 +20,7 @@ check "workspace_is_tokyo" {
 # module "cognito" { ... }      # INF-04
 # module "apigw" { ... }        # INF-05
 # module "iam" { ... }          # INF-06
-# module "ssm" { ... }          # INF-07
+# module "ssm" 已在 ssm.tf 装配（P-07）
 # module "scheduler" { ... }    # INF-08
 # module "observability" { ... }# INF-09
 
