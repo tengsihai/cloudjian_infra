@@ -1,0 +1,12 @@
+# INF-06 装配（P-05）
+
+module "iam" {
+  source = "./modules/iam"
+
+  project               = var.project
+  region                = var.region
+  data_bucket_arn       = module.storage.data_bucket_arn
+  logs_bucket_arn       = module.storage.logs_bucket_arn
+  cdn_distribution_arn  = module.cdn.distribution_arn
+  cognito_user_pool_arn = module.cognito.user_pool_arn
+}

@@ -28,3 +28,12 @@ skip-check:
   - CKV_AWS_174
   # 响应头策略：安全头由 API 网关 CORS + 前端 meta 承担；架构未要求 CDN 注入安全头
   - CKV2_AWS_32
+  # —— IAM（P-05）——
+  # terraform 角色是管理面角色（方案 12.5 显式列举 cloudjian-*）；CloudFront/CE 等
+  # 服务在资源创建前无稳定 ARN，CE 标签操作本身只支持 *。已收窄：角色 ARN 前缀、
+  # 桶 ARN 显式列举、APIGW 区域限定、SSM 前缀、日志组前缀、scheduler 组前缀。
+  # 凭证暴露/权限管理类检查针对的是「给用户放 admin」模式，此处为 CI 服务角色。
+  - CKV_AWS_287
+  - CKV_AWS_289
+  - CKV_AWS_290
+  - CKV_AWS_355
