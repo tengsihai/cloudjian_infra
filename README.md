@@ -105,6 +105,25 @@ terraform plan
 
 实测：`./scripts/verify_p08_live.sh`（apply 后）
 
+
+## 流水线（INF-10）
+
+| workflow | 触发 | 部署 | 要点 |
+|-|-|-|-|
+| `ci.yml` | PR → `dev` | 否 | lint（无凭证）→ plan（`environment: dev`）→ **资源计数**贴 PR 评论 |
+| `deploy.yml` | push `dev` | **是** | `gh pr list --state merged` 查不到 SHA 即失败；apply 后结构/live 门禁；策略/CDN 变更触发匿名穿透 |
+| `release.yml` | push `main` | 否 | 打 tag + CHANGELOG 片段 + 写 `/cloudjian/release/archive`；**零 apply** |
+| `drift.yml` | 每周一 03:00 UTC | 否 | `plan -detailed-exitcode`，有差异开 Issue（label `drift`） |
+| `state-backup.yml` | 每月 1 日 | 否 | `s3 sync` 状态桶 → artifact 90 天 |
+
+硬约束：
+
+- **凡带 AWS 凭证的 job 必须 `environment: dev`**（OIDC sub 口径）；纯 lint 不声明。
+- 禁 `pull_request_target`；全部 `uses:` 按 **40 位 commit SHA** 锁。
+- 仓库需配置 GitHub Environment `dev` + Variable `AWS_TERRAFORM_ROLE_ARN`
+  （`arn:aws:iam::<acct>:role/cloudjian-gha-terraform-role`）。
+- 本地复跑：`bash scripts/verify_ci_structure.sh`；plan 摘要：`python scripts/plan_summary.py plan.json`。
+
 ## 分支与发布
 
 - `feat/*` → PR：fmt/validate/tflint/checkov + plan 摘要（不部署）

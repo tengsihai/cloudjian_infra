@@ -1,0 +1,105 @@
+# INF-10 · main 归档（方案 12.4 / 任务拆解 9.3）
+# 零部署步骤：打 tag、CHANGELOG 片段、写 /cloudjian/release/archive。
+# 带凭证 job 必须 environment: dev（与部署同一 environment 口径，sub 不变）。
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write # 打 tag
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-1
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # main 只接收 dev 的 PR；同样做二次校验
+      - name: Verify commit came from a merged PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA="${GITHUB_SHA}"
+          MATCH=$(gh pr list --repo "${GITHUB_REPOSITORY}" --state merged --search "${SHA}" --json number --jq ".[].number" || true)
+          if [ -z "${MATCH}" ]; then
+            echo "::error::commit ${SHA} 未关联已合并 PR（main 仅归档已评审变更）"
+            exit 1
+          fi
+          echo "OK: linked PR #${MATCH}"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@45666896f5d8e0f10ae255413f3a4cdd03bdc8f5 # v6.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ap-northeast-1
+
+      - name: Tag release
+        run: |
+          TAG="v$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "tag $TAG already exists"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: CHANGELOG fragment
+        run: |
+          mkdir -p docs/changelog
+          {
+            echo "## ${TAG} — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo ""
+            echo "- commit: \`${GITHUB_SHA}\`"
+            echo "- actor: ${GITHUB_ACTOR}"
+            git log -1 --pretty=format:'- subject: %s%n'
+          } >> "docs/changelog/${TAG}.md"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "docs/changelog/${TAG}.md"
+          git commit -m "changelog: ${TAG}" || true
+          git push origin HEAD:${GITHUB_REF_NAME} || true
+
+      # 唯一允许写 release/archive 的路径（架构 10.2）
+      - name: Write /cloudjian/release/archive
+        run: |
+          PAYLOAD=$(python - <<'PY'
+          import json, os, datetime
+          print(json.dumps({
+            "tag": os.environ.get("TAG", ""),
+            "sha": os.environ["GITHUB_SHA"],
+            "actor": os.environ.get("GITHUB_ACTOR", ""),
+            "ts": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "by": "github-actions-release",
+          }))
+          PY
+          )
+          aws ssm put-parameter \
+            --name /cloudjian/release/archive \
+            --type String \
+            --value "$PAYLOAD" \
+            --overwrite \
+            --region "$AWS_REGION"
+          echo "release/archive written"
+
+      # 断言：本 workflow 不含 apply/destroy
+      - name: Assert zero deploy steps
+        run: |
+          if grep -nE 'terraform apply|terraform destroy|aws s3 sync' .github/workflows/release.yml | grep -v 'Assert' ; then
+            echo "::error::release.yml 含部署步骤（红线：main 零部署）"
+            exit 1
+          fi
+          echo "OK: release.yml 零部署"

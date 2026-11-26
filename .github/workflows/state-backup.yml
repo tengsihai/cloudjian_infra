@@ -1,0 +1,50 @@
+# INF-10 · 状态桶月度备份（任务拆解 9.8）
+# 每月一次全量 sync 到工作区并作为 artifact 留存；跨区域副本见 docs 运维计划。
+name: state-backup
+
+on:
+  schedule:
+    # 每月 1 日 04:00 UTC
+    - cron: "0 4 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: state-backup
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ap-northeast-1
+  STATE_BUCKET: cloudjian-tfstate-tokyo
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@45666896f5d8e0f10ae255413f3a4cdd03bdc8f5 # v6.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ap-northeast-1
+
+      - name: Sync state bucket
+        run: |
+          mkdir -p tfstate-backup
+          aws s3 sync "s3://${STATE_BUCKET}/" tfstate-backup/ --region "$AWS_REGION"
+          # 清单
+          find tfstate-backup -type f | sort > tfstate-backup/MANIFEST.txt
+          wc -l tfstate-backup/MANIFEST.txt
+
+      - name: Upload artifact (90 days)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tfstate-backup-${{ github.run_id }}
+          path: tfstate-backup/
+          retention-days: 90
+          if-no-files-found: error
