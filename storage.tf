@@ -4,4 +4,5 @@ module "storage" {
   source = "./modules/storage"
 
   project = var.project
+  region  = var.region
 }

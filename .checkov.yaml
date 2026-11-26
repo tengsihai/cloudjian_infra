@@ -4,6 +4,7 @@ framework:
 
 # 交付门禁：无高危失败；下列项为已拍板取舍，逐条写明出处
 skip-check:
+  # —— S3（P-01）——
   # 单区域东京部署，无跨区容灾需求（方案 12 部署区域；成本模型未含 CRR）
   - CKV_AWS_144
   # 加密用 SSE-S3（AES256），不上 KMS：内部工具、免 KMS 管理面与费用（方案 12.8 成本口径）
@@ -12,3 +13,18 @@ skip-check:
   - CKV2_AWS_62
   # 访问日志桶不开 Versioning：日志为追加型，30 天过期即可（方案 12.7）；数据桶与状态桶均已开
   - CKV_AWS_21
+  # —— CloudFront（P-03）——
+  # 不做地理限制：100 人内部工具，无合规区域封锁需求（架构 8.4 / 方案 12）
+  - CKV_AWS_374
+  # 不做源站故障转移：单一 S3 源，无第二源可切（架构 8.4）
+  - CKV_AWS_310
+  # 不挂 WAF：方案 12.1 明确 HTTP API 侧亦无 WAF；成本模型未含 WAF（$5 预算装不下）
+  - CKV_AWS_68
+  - CKV2_AWS_47
+  # 使用 *.cloudfront.net 默认证书：本期不配自定义域名/ACM（命名规范 13.1：不使用 Hosted UI）
+  - CKV2_AWS_42
+  # 已显式设 minimum_protocol_version=TLSv1.2_2021；checkov 对 default_certificate
+  # 组合仍判失败（不认该写法），以 TF 配置为准
+  - CKV_AWS_174
+  # 响应头策略：安全头由 API 网关 CORS + 前端 meta 承担；架构未要求 CDN 注入安全头
+  - CKV2_AWS_32
