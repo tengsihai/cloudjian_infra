@@ -21,8 +21,8 @@ check "workspace_is_tokyo" {
 # module "apigw" { ... }        # INF-05
 # module "iam" { ... }          # INF-06
 # module "ssm" 已在 ssm.tf 装配（P-07）
-# module "scheduler" { ... }    # INF-08
-# module "observability" { ... }# INF-09
+# module "scheduler" 已在 scheduler.tf 装配（P-08）
+# module "observability" 已在 observability.tf 装配（P-08）
 
 module "network" {
   source = "./modules/network"

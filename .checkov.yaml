@@ -51,3 +51,9 @@ skip-check:
   # 架构 10.2：参数总线不存业务数据/机密（桶名、域名、ID、ARN）；用 Standard 免费类型，
   # 不上 SecureString（免 KMS 管理面与费用，与 SSE-S3 同成本口径，方案 12.2/12.8）
   - CKV2_AWS_34
+
+  # —— Scheduler / SNS（P-08）——
+  # 不上 CMK：告警主题只含 alarm 元数据、调度 input 只有 task 名；与 SSE-S3 同
+  # 成本口径（方案 12.8 未含 KMS），免管理面
+  - CKV_AWS_26
+  - CKV_AWS_297

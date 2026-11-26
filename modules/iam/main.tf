@@ -410,6 +410,33 @@ resource "aws_iam_role_policy" "gha_terraform" {
         ]
       },
       {
+        # 告警（架构 10.7）：PutMetricAlarm 等；资源按 cloudjian-* 前缀收窄
+        Sid    = "ManageAlarms"
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricAlarm", "cloudwatch:DeleteAlarms", "cloudwatch:DescribeAlarms",
+          "cloudwatch:TagResource", "cloudwatch:UntagResource",
+          "cloudwatch:PutMetricData",
+        ]
+        Resource = [
+          "arn:${local.partition}:cloudwatch:${var.region}:${local.account_id}:alarm:cloudjian-*",
+          "arn:${local.partition}:cloudwatch:${var.region}:${local.account_id}:*",
+        ]
+      },
+      {
+        # SNS 告警主题（80%/100% 邮件与告警动作）
+        Sid    = "ManageAlarmTopics"
+        Effect = "Allow"
+        Action = [
+          "sns:CreateTopic", "sns:DeleteTopic", "sns:GetTopicAttributes", "sns:SetTopicAttributes",
+          "sns:Subscribe", "sns:Unsubscribe", "sns:ListSubscriptionsByTopic", "sns:Publish",
+          "sns:TagResource", "sns:UntagResource",
+        ]
+        Resource = [
+          "arn:${local.partition}:sns:${var.region}:${local.account_id}:cloudjian-*",
+        ]
+      },
+      {
         # Cost Allocation Tags 激活
         Sid      = "CostTags"
         Effect   = "Allow"
@@ -477,8 +504,11 @@ resource "aws_iam_role_policy" "lambda_execution" {
           "logs:DescribeLogStreams", "logs:TagLogGroup",
         ]
         Resource = [
+          # 默认路径 + 架构 10.7 自定义组 cloudjian-<fn>-api
           "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/cloudjian-*",
           "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/cloudjian-*:*",
+          "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:cloudjian-*",
+          "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:cloudjian-*:*",
         ]
       },
       {

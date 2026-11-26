@@ -76,6 +76,35 @@ terraform plan
 - 资源前缀 `cloudjian-drill-*`，SSM 前缀 `/cloudjian-drill/*`
 - **禁止**沿用 `cloudjian-*`：销毁 drill 栈会误删线上参数
 
+
+## 调度与告警（P-08）
+
+### 三条 Schedule（INF-08）
+
+| 调度 | 频率（JST） | task |
+|-|-|-|
+| `cloudjian-daily-reconcile` | 每日 01:00 | `daily_reconcile` |
+| `cloudjian-daily-index-check` | 每日 03:00 | `daily_index_check` |
+| `cloudjian-weekly-contract` | 每周一 04:00 | `weekly_contract` |
+
+目标 ARN 固定 `...:function:cloudjian-maintenance-api:live`（可推导字符串，**不校验函数存在**）。
+弹性窗口 60 分钟；retry 2 次 / 1h。
+
+**函数未就绪窗口（8.4）**：backend 首次发布前调度直调会失败（可读错误，不反复告警轰炸——
+所有告警 `treat_missing_data=notBreaching`）；**首发布 maintenance 后转绿**。
+发布失败依赖 T3 CI 打点 `CloudJian/PublishFailed`（未打点前告警不触发）。
+
+### 告警与预算基线（交接 T4）
+
+- 日志组：`cloudjian-<fn>-api` ×6，保留 30 天
+- 告警动作 → SNS `cloudjian-alarms`（邮件订阅 = `budget_alert_emails`）
+- 告警清单：Lambda Errors×6、API 5xx、CF 5xx%、412 冲突、JOB_RUNNING、SHARE_REVOKED、PublishFailed
+- **JOB_RUNNING / SHARE_REVOKED 独立计数，不计入 5xx 口径**
+- Budgets：`cloudjian` $5/月，ACTUAL 80%/100%（有邮箱才挂通知）
+- Cost Allocation Tags：`Project` / `Component` / `Environment` / `ManagedBy` Active
+
+实测：`./scripts/verify_p08_live.sh`（apply 后）
+
 ## 分支与发布
 
 - `feat/*` → PR：fmt/validate/tflint/checkov + plan 摘要（不部署）
