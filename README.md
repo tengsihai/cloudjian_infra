@@ -15,7 +15,7 @@ cloudjian-infra/
 │   ├── storage/       # INF-01/02 桶、生命周期、策略、OAC、CORS
 │   ├── cdn/           # INF-03 CloudFront + Function
 │   ├── cognito/       # INF-04
-│   ├── apigw/         # INF-05 HTTP API 路由与授权器
+│   ├── apigw/         # INF-05 HTTP API 壳（API/Stage/JWT/CORS，路由归 backend）
 │   ├── iam/           # INF-06
 │   ├── ssm/           # INF-07 参数总线
 │   ├── scheduler/     # INF-08
@@ -46,13 +46,13 @@ terraform plan
 
 ## 五条红线（违反任一 = 阻断合入）
 
-1. 不建 `$default` 路由（OPTIONS 会被拦成 401，CORS 全废）；
-2. `GET /public/notes/{public_token}`（N8）单独注册为无鉴权路由；
+1. 不建 `$default` 路由（OPTIONS 会被拦成 401，CORS 全废）——**backend CI** 校验；
+2. `GET /public/notes/{public_token}`（N8）单独 NONE，不挂 JWT——**backend CI** 校验；
 3. 生命周期只用标签 `cj:retention=30d/1d`，不用前缀（`prefix` 字面匹配，命中 0 个不报错）；
 4. CDN 白名单只放 `/web/*` 与 `users/*/assets/public/*`，私有路径 403 终态；
 5. TF 不得出现 `aws_lambda_function` / `aws_lambda_layer_version`（含 `aws_lambda_permission`——add-permission 归 backend）。
 
-静态断言：`./scripts/verify_static.sh`（CI 必跑，可本地复跑）；Lambda 清单一致性：`./scripts/verify_lambda_inventory.sh`。
+静态断言：`./scripts/verify_static.sh` + `./scripts/verify_apigw_shell.sh`（infra 不建路由/集成、不枚举函数名）；红线 1/2 的路由面校验归 backend CI（契约 §2.6）。
 
 ## SSM 参数变更触发清单
 
@@ -97,10 +97,10 @@ terraform plan
 
 ### 告警与预算基线（交接 T4）
 
-- 日志组：每个函数一个同名日志组 ×38，保留 30 天
+- 函数日志组与 30 天保留：**backend 部署时**创建并设置（infra 不枚举函数）
 - 告警动作 → SNS `cloudjian-alarms`（邮件订阅 = `budget_alert_emails`）
-- 告警清单：Lambda Errors×38、API 5xx、CF 5xx%、412 冲突、JOB_RUNNING、SHARE_REVOKED、PublishFailed
-- **JOB_RUNNING / SHARE_REVOKED 独立计数，不计入 5xx 口径**
+- 平台告警清单：API 5xx、CF 5xx%、412 冲突、JOB_RUNNING、SHARE_REVOKED、PublishFailed
+- **JOB_RUNNING / SHARE_REVOKED 走 backend EMF 指标**（namespace `CloudJian`），不计入 5xx 口径
 - Budgets：`cloudjian` $5/月，ACTUAL 80%/100%（有邮箱才挂通知）
 - Cost Allocation Tags：`Project` / `Component` / `Environment` / `ManagedBy` Active
 

@@ -27,3 +27,8 @@ variable "cognito_user_pool_arn" {
   description = "用户池 ARN（lambda Cognito 动作限定）"
   type        = string
 }
+
+variable "api_id" {
+  description = "HTTP API ID（backend 角色注册路由的授权范围）"
+  type        = string
+}

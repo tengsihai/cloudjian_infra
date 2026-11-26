@@ -1,6 +1,6 @@
 # 云笺 CloudJian — 共同接口契约 v0.1
 
-> **2026-11-26 修订**：§2.6 改为**一条路由一个函数**（37 个接口函数 + 1 个维护函数）；字段、路由键、错误码未变。
+> **2026-11-26 修订**：§2.6 改为**一条路由一个函数、路由由 backend 部署时注册**（数量随功能增减，不写死）；字段、路由键、错误码未变。
 
 > **新人入口**：[docs/README.md](README.md)。本文是字段/路由/错误码**唯一真源**。
 
@@ -94,59 +94,61 @@
 | P1 | GET | `/profile` | — | `{ui_lang,tz,theme,editor_mode,list_sort,page_size}` + ETag |
 | P2 | PUT | `/profile` | 6 项子集（`page_size`∈{20,50,100}） | 200 + ETag |
 
-### 2.6 路由 → 函数（一条路由一个函数）
+### 2.6 路由归属与注册（一条路由一个函数）
 
-| # | 方法 | 路径 | 鉴权 | 函数（别名 `live`） |
+**路由与集成归 backend 部署时注册**；infra 只建 API 壳（API / Stage / JWT 授权器 / CORS），不建任何 route/integration，也不枚举函数名。新增功能只需改 frontend + backend，**不改 infra**。
+
+| # | 方法 | 路径 | 鉴权 | 目标 |
 |-|-|-|-|-|
-| N1 | GET | `/notes` | JWT | `cloudjian-notes-list-api` |
-| N2 | POST | `/notes` | JWT | `cloudjian-notes-create-api` |
-| N3 | GET | `/notes/{note_id}` | JWT | `cloudjian-notes-get-api` |
-| N4 | PUT | `/notes/{note_id}` | JWT | `cloudjian-notes-update-api` |
-| N5 | DELETE | `/notes/{note_id}` | JWT | `cloudjian-notes-delete-api` |
-| N6 | POST | `/trash/purge` | JWT | `cloudjian-trash-purge-api` |
-| V1 | GET | `/notes/{note_id}/versions` | JWT | `cloudjian-versions-list-api` |
-| V2 | POST | `/notes/{note_id}/versions/{ts}/restore` | JWT | `cloudjian-versions-restore-api` |
-| V3 | GET | `/notes/{note_id}/versions/{ts}` | JWT | `cloudjian-versions-get-api` |
-| S1 | GET | `/search` | JWT | `cloudjian-search-query-api` |
-| S2 | GET | `/dirs` | JWT | `cloudjian-dirs-list-api` |
-| S3 | POST | `/dirs/move` | JWT | `cloudjian-dirs-move-api` |
-| S4 | POST | `/dirs` | JWT | `cloudjian-dirs-create-api` |
-| S5 | PATCH | `/dirs` | JWT | `cloudjian-dirs-update-api` |
-| S6 | DELETE | `/dirs` | JWT | `cloudjian-dirs-delete-api` |
-| S7（派生） | POST | `/dirs/restore` | JWT | `cloudjian-dirs-restore-api` |
-| J1 | GET | `/jobs/{job_id}` | JWT | `cloudjian-jobs-get-api` |
-| N7 | POST | `/notes/{note_id}/visibility` | JWT | `cloudjian-notes-visibility-api` |
-| N8 | GET | `/public/notes/{public_token}` | 匿名 | `cloudjian-notes-public-get-api`（NONE） |
-| H1 | GET | `/shares` | JWT | `cloudjian-shares-list-api` |
-| H2 | POST | `/shares` | JWT | `cloudjian-shares-create-api` |
-| H3 | DELETE | `/shares/{share_id}` | JWT | `cloudjian-shares-revoke-api` |
-| A1 | POST | `/assets/presign` | JWT | `cloudjian-assets-presign-api` |
-| A2 | POST | `/assets/register` | JWT | `cloudjian-assets-register-api` |
-| A3 | GET | `/assets/{asset_id}/url` | JWT | `cloudjian-assets-url-get-api` |
-| A4 | POST | `/assets/urls` | JWT | `cloudjian-assets-urls-api` |
-| A5 | GET | `/assets` | JWT | `cloudjian-assets-list-api` |
-| M1 | GET | `/admin/users` | JWT | `cloudjian-admin-users-list-api` |
-| M2 | POST | `/admin/users` | JWT | `cloudjian-admin-users-create-api` |
-| M3 | PATCH | `/admin/users/{sub}` | JWT | `cloudjian-admin-users-update-api` |
-| M5 | POST | `/admin/users/{sub}/reset` | JWT | `cloudjian-admin-users-reset-api` |
-| M6 | GET | `/admin/team-config` | JWT | `cloudjian-admin-team-config-get-api` |
-| M7 | PUT | `/admin/team-config` | JWT | `cloudjian-admin-team-config-put-api` |
-| P1 | GET | `/profile` | JWT | `cloudjian-profile-get-api` |
-| P2 | PUT | `/profile` | JWT | `cloudjian-profile-put-api` |
-| E1 | POST | `/exports` | JWT | `cloudjian-exports-create-api` |
-| E2 | GET | `/exports/{job_id}` | JWT | `cloudjian-exports-get-api` |
-| — | — | 3 条 EventBridge 调度 | 无 | `cloudjian-maintenance-api`（不挂网关） |
+| N1 | GET | `/notes` | JWT | 1 函数（别名 `live`） |
+| N2 | POST | `/notes` | JWT | 1 函数 |
+| N3 | GET | `/notes/{note_id}` | JWT | 1 函数 |
+| N4 | PUT | `/notes/{note_id}` | JWT | 1 函数 |
+| N5 | DELETE | `/notes/{note_id}` | JWT | 1 函数 |
+| N6 | POST | `/trash/purge` | JWT | 1 函数 |
+| V1 | GET | `/notes/{note_id}/versions` | JWT | 1 函数 |
+| V2 | POST | `/notes/{note_id}/versions/{ts}/restore` | JWT | 1 函数 |
+| V3 | GET | `/notes/{note_id}/versions/{ts}` | JWT | 1 函数 |
+| S1 | GET | `/search` | JWT | 1 函数 |
+| S2 | GET | `/dirs` | JWT | 1 函数 |
+| S3 | POST | `/dirs/move` | JWT | 1 函数 |
+| S4 | POST | `/dirs` | JWT | 1 函数 |
+| S5 | PATCH | `/dirs` | JWT | 1 函数 |
+| S6 | DELETE | `/dirs` | JWT | 1 函数 |
+| S7（派生） | POST | `/dirs/restore` | JWT | 1 函数 |
+| J1 | GET | `/jobs/{job_id}` | JWT | 1 函数 |
+| N7 | POST | `/notes/{note_id}/visibility` | JWT | 1 函数 |
+| N8 | GET | `/public/notes/{public_token}` | **匿名 NONE** | 1 函数 |
+| H1 | GET | `/shares` | JWT | 1 函数 |
+| H2 | POST | `/shares` | JWT | 1 函数 |
+| H3 | DELETE | `/shares/{share_id}` | JWT | 1 函数 |
+| A1 | POST | `/assets/presign` | JWT | 1 函数 |
+| A2 | POST | `/assets/register` | JWT | 1 函数 |
+| A3 | GET | `/assets/{asset_id}/url` | JWT | 1 函数 |
+| A4 | POST | `/assets/urls` | JWT | 1 函数 |
+| A5 | GET | `/assets` | JWT | 1 函数 |
+| M1 | GET | `/admin/users` | JWT | 1 函数 |
+| M2 | POST | `/admin/users` | JWT | 1 函数 |
+| M3 | PATCH | `/admin/users/{sub}` | JWT | 1 函数 |
+| M5 | POST | `/admin/users/{sub}/reset` | JWT | 1 函数 |
+| M6 | GET | `/admin/team-config` | JWT | 1 函数 |
+| M7 | PUT | `/admin/team-config` | JWT | 1 函数 |
+| P1 | GET | `/profile` | JWT | 1 函数 |
+| P2 | PUT | `/profile` | JWT | 1 函数 |
+| E1 | POST | `/exports` | JWT | 1 函数 |
+| E2 | GET | `/exports/{job_id}` | JWT | 1 函数 |
+| — | — | EventBridge 调度（不挂网关） | 无 | `cloudjian-maintenance-api` |
 
 > **M4 `DELETE /admin/users/{sub}` 不挂载**（路由不存在，故不入表）。
 
 约定：
 
-- **一条路由一个函数**：37 个接口函数，每个只接一条路由；禁止多路由共用函数（CI 门禁：`verify_routes_structure.sh` + `verify_lambda_inventory.sh`）。
-- 命名 `cloudjian-<域>-<动作>-api`；别名固定 `live`；一个函数一个同名日志组（保留 30 天）。
-- N8 `GET /public/notes/{public_token}` 是唯一匿名路由，单独 NONE；`cloudjian-maintenance-api` 不建集成、不暴露。
-- 新增/删除路由必须同时增减函数，并同步本表与两个门禁脚本。
-
-> N8 必须**单独注册为无鉴权路由**（not 挂 JWT authorizer），且不得与 `/notes/{note_id}` 混在同一路径模板下。
+- **一条路由一个函数**：每条接口路由对应一个独立 Lambda，禁止多路由共用函数；数量随功能增减，**不在文档写死**。
+- **注册时机**：backend 部署流水线按本表创建 integration、route，并对每个函数 `add-permission`（SourceArn 含 API ID）；infra 提供 `api-id` / `jwt-authorizer-id` 等 SSM 参数。
+- **命名**：`cloudjian-<域>-<动作>-api`；别名固定 `live`；函数日志组与函数同名，backend 部署时设 30 天保留。
+- **路由红线（backend CI 校验）**：① 不得出现 `$default`；② 仅 N8 为 NONE（不挂 JWT），其余显式 JWT；③ M4 不挂载；④ maintenance 不建集成、不暴露。
+- N8 必须**单独注册为无鉴权路由**，且不得与 `/notes/{note_id}` 混在同一路径模板下。
+- 新增/删除路由：只改 backend（+ 若有前端调用则改 frontend），同步本表；**不改 infra**。
 
 ## 3. 错误码（按域）
 

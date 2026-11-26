@@ -28,8 +28,8 @@
 | 文档 | 当前版本 | 角色 | 备注 |
 |-|-|-|-|
 | [方案设计](云笺-ALL-基线-方案设计-v1.13.7.md) | **v1.13.7** | 产品+技术总规则 | 文首修订块可跳过；看 **1–14、17 章** |
-| [技术架构](云笺-ALL-基线-技术架构-v1.2.md) | **v1.2** | 开发可执行基线 | §1 写「来源 v1.13.6」已过时 → **按 v1.13.7 正文**；2026-11-26 正文修订：Lambda 一条路由一个函数（§5.0.1 / §10.4） |
-| [接口契约](云笺-ALL-契约-接口契约-v0.1.md) | **v0.1** | 四队对齐字段/路由/错误码 | **唯一接口真源**；§2.6 已按「一条路由一个函数」重写（2026-11-26） |
+| [技术架构](云笺-ALL-基线-技术架构-v1.2.md) | **v1.2** | 开发可执行基线 | §1 写「来源 v1.13.6」已过时 → **按 v1.13.7 正文**；2026-11-26 正文修订：一条路由一个函数、路由由 backend 注册（§5.0.1 / §10.4） |
+| [接口契约](云笺-ALL-契约-接口契约-v0.1.md) | **v0.1** | 四队对齐字段/路由/错误码 | **唯一接口真源**；§2.6 已改为「backend 部署时注册路由」（2026-11-26），不写死函数数量 |
 | [PRD 原型输入](云笺-ALL-基线-PRD原型输入-v0.3.5.md) | **v0.3.5** | 产品口径（用户看得见的规则） | 架构里写 v0.3.4 → **以 0.3.5 为准** |
 | [页面清单](云笺-ALL-基线-页面清单-v0.6.md) | **v0.6** | 页面/流程/权限矩阵 | 架构里写 v0.5 → **以 0.6 为准** |
 | [线框规格](云笺-ALL-基线-线框规格-v1.2.md) | **v1.2** | 前端骨架与状态机 | 需要画界面时再读 |
@@ -91,13 +91,13 @@
 | 仓库 | 只做 | 明确不做 |
 |-|-|-|
 | cloudjian-frontend | 页面、构建、`s3 sync web/`、CDN 失效 | 不改桶策略/路由/Cognito |
-| cloudjian-backend | 37 个接口 Lambda（一条路由一个函数）+ 维护函数、Layer、`add-permission`、业务逻辑 | 不建 API GW/桶策略/CDN |
-| cloudjian-infra | S3/CDN/Cognito/API 路由/IAM/SSM/Scheduler/告警/流水线 | **不建 Lambda/Layer、不部署 VPC、不 sync 前端** |
+| cloudjian-backend | 接口 Lambda + 维护函数、Layer、**按契约注册路由与集成**、`add-permission`、业务逻辑、函数日志组 30 天 | 不建 API GW 壳/桶策略/CDN/Cognito |
+| cloudjian-infra | S3/CDN/Cognito/**API 壳**（Stage/JWT/CORS）/IAM/SSM/Scheduler/告警/流水线 | **不建路由/集成、不建 Lambda/Layer、不部署 VPC、不 sync 前端** |
 
 **五条红线（违反 = 阻断合入）：**
 
-1. 不建 `$default` 路由（OPTIONS 会被拦成 401，CORS 全废）
-2. `GET /public/notes/{public_token}`（N8）单独 NONE，不挂 JWT
+1. 不建 `$default` 路由（OPTIONS 会被拦成 401，CORS 全废）——**backend CI** 校验
+2. `GET /public/notes/{public_token}`（N8）单独 NONE，不挂 JWT——**backend CI** 校验
 3. 生命周期只用标签 `cj:retention=30d/1d`，**不用 prefix**（prefix 是字面匹配，命中 0 不报错）
 4. CDN 白名单只放 `/web/*` 与 `users/*/assets/public/*`；私有路径 403 终态
 5. infra 的 TF 不得出现 `aws_lambda_function` / `aws_lambda_layer_version`（含 `aws_lambda_permission`）
@@ -120,7 +120,7 @@
 | CORS | **只在 API 网关配**；Lambda 不输出 CORS 头 |
 | 条件写 | `If-Match`/`ETag` 透传 S3；冲突 **412 `NOTE_CONFLICT`** |
 | 定时任务 | 3 条 Schedule → `cloudjian-maintenance-api:live`（IAM 直调，不挂 API） |
-| Lambda 拆分 | **一条路由一个函数**：37 个接口函数 + 1 个维护函数；命名 `cloudjian-<域>-<动作>-api`，别名 `live`，一个函数一个同名日志组 |
+| Lambda 拆分 | **一条路由一个函数**（数量随功能增减，不写死）；命名 `cloudjian-<域>-<动作>-api`，别名 `live`；路由/集成由 **backend 部署时注册**，infra 只建 API 壳 |
 | 错误码真源 | `backend/app/errors/error_codes.py`；首个业务 PR 冻结后只增不改 |
 
 ---

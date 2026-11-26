@@ -79,56 +79,16 @@ for name in sorted(snames):
     else:
         err(f"{name} 目标 ARN={arn}")
 
-# 日志组 38 + 30 天（组名 = 函数名）
-expected_lg = [
-    "cloudjian-notes-list-api",
-    "cloudjian-notes-create-api",
-    "cloudjian-notes-get-api",
-    "cloudjian-notes-update-api",
-    "cloudjian-notes-delete-api",
-    "cloudjian-trash-purge-api",
-    "cloudjian-versions-list-api",
-    "cloudjian-versions-restore-api",
-    "cloudjian-versions-get-api",
-    "cloudjian-search-query-api",
-    "cloudjian-dirs-list-api",
-    "cloudjian-dirs-move-api",
-    "cloudjian-dirs-create-api",
-    "cloudjian-dirs-update-api",
-    "cloudjian-dirs-delete-api",
-    "cloudjian-dirs-restore-api",
-    "cloudjian-jobs-get-api",
-    "cloudjian-notes-visibility-api",
-    "cloudjian-notes-public-get-api",
-    "cloudjian-shares-list-api",
-    "cloudjian-shares-create-api",
-    "cloudjian-shares-revoke-api",
-    "cloudjian-assets-presign-api",
-    "cloudjian-assets-register-api",
-    "cloudjian-assets-url-get-api",
-    "cloudjian-assets-urls-api",
-    "cloudjian-assets-list-api",
-    "cloudjian-admin-users-list-api",
-    "cloudjian-admin-users-create-api",
-    "cloudjian-admin-users-update-api",
-    "cloudjian-admin-users-reset-api",
-    "cloudjian-admin-team-config-get-api",
-    "cloudjian-admin-team-config-put-api",
-    "cloudjian-profile-get-api",
-    "cloudjian-profile-put-api",
-    "cloudjian-exports-create-api",
-    "cloudjian-exports-get-api",
-    "cloudjian-maintenance-api",
-]
-by_lg = {lg["logGroupName"]: lg for lg in logs.get("logGroups", [])}
-for name in expected_lg:
-    lg = by_lg.get(name)
-    if not lg:
-        err(f"缺日志组 {name}")
-    elif lg.get("retentionInDays") != 30:
-        err(f"{name} retention={lg.get('retentionInDays')} (want 30)")
-    else:
-        ok(f"{name} retention=30")
+# 访问日志组 30 天（函数日志组由 backend 部署时设置）
+by_lg = {g.get("logGroupName"): g for g in logs.get("logGroups", [])}
+lg = by_lg.get("cloudjian-api-access")
+if not lg:
+    # apigw_logs 在 infra；名字固定
+    err("缺访问日志组 cloudjian-api-access")
+elif lg.get("retentionInDays") != 30:
+    err(f"cloudjian-api-access retention={lg.get('retentionInDays')} (want 30)")
+else:
+    ok("cloudjian-api-access retention=30")
 
 # 告警
 anames = {a["AlarmName"] for a in alarms.get("MetricAlarms", [])}
@@ -144,13 +104,6 @@ for a in (
         ok(f"告警 {a}")
     else:
         err(f"缺告警 {a}")
-# lambda errors ×38
-err_alarms = [n for n in anames if n.endswith("-errors")]
-if len(err_alarms) >= 38:
-    ok(f"Lambda 错误率告警 {len(err_alarms)} 条")
-else:
-    err(f"Lambda 错误率告警仅 {len(err_alarms)} 条")
-
 # 预算
 bl = budgets.get("Budgets", [])
 bj = next((b for b in bl if b.get("BudgetName") == "cloudjian"), None)

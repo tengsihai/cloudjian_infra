@@ -1,6 +1,6 @@
 # 云笺（CloudJian）技术架构文档 v1.2
 
-> **2026-11-26 修订（正文已同步）**：Lambda 由 6 个按域合并改为**一条路由一个函数**（37 个接口函数 + 1 个维护函数），逐条清单见契约 §2.6；字段、路由键、错误码未变。
+> **2026-11-26 修订（正文已同步）**：Lambda 改为**一条路由一个函数**（数量随功能增减，不写死）；**路由由 backend 部署时注册**，infra 只建 API 壳；字段、路由键、错误码未变。
 
 > **新人入口**：先读 [docs/README.md](README.md)（阅读顺序 + 当前有效版本）。
 > 变更史见 [云笺-修订史归档.md](云笺-修订史归档.md)；**实现只认正文**。
@@ -58,7 +58,7 @@ flowchart LR
   B -->|"业务 API + AccessToken"| APIG["HTTP API<br/>JWT 授权器"]
   B -->|"预签名 PUT / GET"| S3["S3 数据桶<br/>cloudjian-data-tokyo"]
   CF -->|"OAC"| S3
-  APIG --> L["Lambda 37 + 1<br/>一路由一函数"]
+  APIG --> L["Lambda<br/>一路由一函数"]
   L --> S3
   L --> COG["Cognito 用户池"]
   L --> CW["CloudWatch Logs<br/>30 天"]
@@ -76,7 +76,7 @@ flowchart LR
 | CloudFront + Function | 静态资源与公开图分发；路径白名单、SPA rewrite、私有路径终态 403 | 不做鉴权（Function 无网络、无法验 JWT） |
 | S3 数据桶 | 全部业务数据与静态产物；条件写与版本兜底 | 不承担访问控制以外的权限判断 |
 | HTTP API | 路由、JWT 授权器前置过滤、CORS 预检、512KB 计量 | 不区分 Access/ID Token（见 4.3） |
-| Lambda（37 接口函数 + 1 维护） | 每个函数只接一条路由；业务逻辑、注册表与权限判定、Parquet 读写、异步 job | 不做 JWKS 验签；不自造 CORS 头 |
+| Lambda（按功能拆分，数量随功能增长） | 每个函数只接一条路由；业务逻辑、注册表与权限判定、Parquet 读写、异步 job | 不做 JWKS 验签；不自造 CORS 头 |
 | Cognito | 账号、SRP 登录、Token 签发、Group、禁用/重置 | 不作为权限真源（role 以注册表为准） |
 | Scheduler | 三个定时任务（对账、契约校验、索引抽查） | 不承载用户请求 |
 | SSM | 三仓参数总线（桶、域名、API、池、角色） | 不存业务数据 |
@@ -86,8 +86,8 @@ flowchart LR
 | 工程 | 只负责 | 明确不做 |
 |-|-|-|
 | cloudjian-frontend | React 构建产物发布到 `web/`、CloudFront 失效、前端冒烟 | 不创建 AWS 资源、不碰 Lambda / IAM / 桶策略 |
-| cloudjian-backend | Lambda 全生命周期（函数、Layer、别名、集成授权、冒烟、回滚）、`add-permission` | 不改桶策略、不改 OIDC 角色、不建分发、不改 API 路由结构 |
-| cloudjian-infra | S3（生命周期/策略/OAC/CORS）、CloudFront、Function、Cognito、API GW 路由与 Stage、Scheduler、IAM、SSM、日志告警、Budgets | 不创建/更新任何 Lambda 与 Layer、不部署 VPC、不 `s3 sync` 前端产物 |
+| cloudjian-backend | Lambda 全生命周期（函数、Layer、别名、冒烟、回滚）、**按契约注册路由与集成**、`add-permission`、函数日志组 | 不改桶策略、不改 OIDC 角色、不建分发、不建 API GW 壳 |
+| cloudjian-infra | S3（生命周期/策略/OAC/CORS）、CloudFront、Function、Cognito、API GW 壳（Stage/JWT/CORS）、Scheduler、IAM、SSM、日志告警、Budgets | 不建路由/集成、不创建/更新任何 Lambda 与 Layer、不部署 VPC、不 `s3 sync` 前端产物 |
 
 跨仓只通过两条通道耦合：**固定资源命名**（Lambda ARN 字符串可推导）与 **SSM 参数总线**。
 
@@ -123,11 +123,11 @@ flowchart LR
 
 | 项 | 值 |
 |-|-|
-| 函数名 | 37 个接口函数 + 1 个维护函数；命名 `cloudjian-<域>-<动作>-api`；逐条清单见契约 §2.6 |
+| 函数名 | 一条路由一个函数（数量随功能增减）；命名 `cloudjian-<域>-<动作>-api`；约定见契约 §2.6 |
 | 别名 | `live`（集成指向别名 ARN，不指 `$LATEST`） |
 | 环境变量 | `CJ_BUCKET`、`CJ_REGION`、`CJ_USER_POOL_ID`、`CJ_LAYER_MODE=parquet` |
 | 执行角色 | `cloudjian-lambda-role`（ARN 从 `/cloudjian/lambda-exec-role-arn` 读） |
-| 日志组 | 与函数同名（`cloudjian-<域>-<动作>-api`），保留 30 天 |
+| 日志组 | 与函数同名（`cloudjian-<域>-<动作>-api`），backend 部署时创建并设 30 天 |
 
 #### 契约/门禁
 
@@ -272,26 +272,26 @@ sequenceDiagram
 | CORS | 网关 `AllowOrigins`=CDN 域名、`AllowMethods`=GET/POST/PUT/PATCH/DELETE/OPTIONS、`AllowHeaders`=authorization/content-type/if-match、`ExposeHeaders`=etag、`MaxAge`=600；Lambda 不输出 CORS 头 |
 | 幂等 | `POST /assets/register` 按 `asset_id` 幂等；共享收件箱条件写 + 指数退避；job 按 `cursor` 续跑；**purge 靠 `purged[]` + `DeleteObject` 幂等**（9.3.1） |
 
-### 5.0.1 路由 → 目标函数（一条路由一个函数）
+### 5.0.1 路由归属与注册（一条路由一个函数）
 
-> **2026-11-26 架构变更**：Lambda 由「6 个按域合并」改为「一条路由一个函数」，共 **37 个接口函数 + 1 个维护函数**；函数名 `cloudjian-<域>-<动作>-api`，别名固定 `live`。逐条映射以 [契约 §2.6](云笺-ALL-契约-接口契约-v0.1.md) 为准，CI 门禁 `verify_routes_structure.sh` / `verify_lambda_inventory.sh` 保证 1:1。
+> **2026-11-26 架构变更**：一条路由一个函数，**数量随功能增减、不写死**；**路由与集成由 backend 部署时注册**，infra 只建 API 壳。约定与红线见 [契约 §2.6](云笺-ALL-契约-接口契约-v0.1.md)。
 >
-> `GET /public/notes/{public_token}` 是**无鉴权路由**（不挂 JWT 授权器），由 `cloudjian-notes-public-get-api` 按 token 只读返回；其余路由全部需要登录。
+> `GET /public/notes/{public_token}` 是**无鉴权路由**（不挂 JWT 授权器），按 token 只读返回；其余路由全部需要登录。
 
-| 域 | 函数数 | 名称前缀 |
-|-|-|-|
-| 笔记 | 7 | `cloudjian-notes-*` |
-| 回收站 | 1 | `cloudjian-trash-purge-api` |
-| 版本 | 3 | `cloudjian-versions-*` |
-| 搜索 | 1 | `cloudjian-search-query-api` |
-| 目录 | 6 | `cloudjian-dirs-*` |
-| 任务查询 | 1 | `cloudjian-jobs-get-api` |
-| 共享 | 3 | `cloudjian-shares-*` |
-| 图床 | 5 | `cloudjian-assets-*` |
-| 管理 | 6 | `cloudjian-admin-*` |
-| 个人设置 | 2 | `cloudjian-profile-*` |
-| 导出 | 2 | `cloudjian-exports-*` |
-| 运维 | 1 | `cloudjian-maintenance-api`（定时，不挂网关） |
+| 域 | 名称前缀 |
+|-|-|
+| 笔记 | `cloudjian-notes-*` |
+| 回收站 | `cloudjian-trash-purge-api` |
+| 版本 | `cloudjian-versions-*` |
+| 搜索 | `cloudjian-search-query-api` |
+| 目录 | `cloudjian-dirs-*` |
+| 任务查询 | `cloudjian-jobs-get-api` |
+| 共享 | `cloudjian-shares-*` |
+| 图床 | `cloudjian-assets-*` |
+| 管理 | `cloudjian-admin-*` |
+| 个人设置 | `cloudjian-profile-*` |
+| 导出 | `cloudjian-exports-*` |
+| 运维 | `cloudjian-maintenance-api`（定时，不挂网关） |
 
 【派生】路由（页面清单 v0.5 已冻结页面行为，但以下路由键不在 12.1；须随首个接口 PR 定稿后并组）：`GET/POST/PATCH/DELETE /dirs`、`POST /dirs/restore`（组 4）、`GET /jobs/{job_id}`（组 4）、`GET/PUT /profile`（组 7 或独立）、`GET/PUT /admin/team-config`（组 7）、`GET /assets`（组 6）、`GET /notes/{note_id}/versions/{ts}`（组 3）。**冻结的是「页面要什么」，不是「路由长什么样」**——后者由 12.3 的 TODO-API-02/03/04/05/09/10/12 收口。
 
@@ -1116,10 +1116,10 @@ ZIP 以所选目录为根，空目录保留 `dir/`；文件名 `slug.md`，同�
 
 | 契约 | 值 |
 |-|-|
-| 函数名 | 37 个接口函数 + 1 个维护函数；命名 `cloudjian-<域>-<动作>-api`；清单见契约 §2.6 |
+| 函数名 | 一条路由一个函数（数量随功能增减）；命名 `cloudjian-<域>-<动作>-api`；约定见契约 §2.6 |
 | 别名 | `live`，集成指向别名 ARN |
 | 执行角色 | `cloudjian-lambda-role`（信任 lambda.amazonaws.com） |
-| 调用授权 | 每个函数一条 `add-permission`，`SourceArn` 到 `arn:aws:execute-api:ap-northeast-1:<acct>:<api-id>/*` |
+| 路由注册 | backend 部署时创建 integration/route；每个函数一条 `add-permission`，`SourceArn` 到 `arn:aws:execute-api:ap-northeast-1:<acct>:<api-id>/*` |
 | 运行时 | `python3.14`；Layer 同镜像 |
 | 环境变量 | 4 个 `CJ_*` |
 
@@ -1151,9 +1151,9 @@ S3 生命周期 `prefix` 是字面匹配、不支持 `*`：`users/*/trash/` 会�
 
 ### 10.7 可观测性与告警
 
-- 每个函数一个同名日志组（`cloudjian-<域>-<动作>-api`），保留 30 天；审计事件为同组内单行 JSON。
-- 告警：Lambda 错误率、API 5xx、CloudFront 5xx、412 冲突率异常、发布失败、Budgets。
-- `JOB_RUNNING` 与 `SHARE_REVOKED` 打独立计数指标（任务卡死/权限抖动），但**不计入 5xx 错误率**（属正常业务分支）。
+- 函数日志组与函数同名，**backend 部署时**创建并设 30 天保留；审计事件为同组内单行 JSON。
+- 平台告警（infra）：API 5xx、CloudFront 5xx、412 冲突、发布失败、Budgets；**不枚举函数、不建每函数 Errors 告警**。
+- `JOB_RUNNING` 与 `SHARE_REVOKED` 由 backend 以 EMF 打独立计数指标（namespace `CloudJian`），**不计入 5xx 错误率**（属正常业务分支）。
 - S3 Server Access Logging 开启（本身免费，付日志存储），保留 30 天；CloudTrail 只开管理事件，数据事件排障时临时开。
 - Budgets $5/月，80% / 100% 邮件；激活 Cost Allocation Tags（Project/Component/Environment/ManagedBy）。
 
@@ -1168,7 +1168,7 @@ S3 生命周期 `prefix` 是字面匹配、不支持 `*`：`users/*/trash/` 会�
 
 - `terraform apply` 成功不算生命周期验收：必须造 4 类对象（Copy 进 trash、versions、exports、普通笔记）逐個 `get-object-tagging` 确认标签，`list-objects-v2` 确认命中 >0；8 天后非当前版本 ≤3；31 天后 trash/versions 清空。
 - CI grep 门禁：除 `storage/retention.py` 与目录搬移封装白名单外，出现 `put_object(` / `copy_object(` / `upload_file(` / `upload_fileobj(` 即失败。
-- `get-routes` 断言 8 组路由 JWT + AuthorizerId 与 SSM 一致 + 无 `$default`。
+- `get-routes` 断言（backend CI）：N8 单独 NONE、其余 JWT + AuthorizerId 与 SSM 一致、无 `$default`、M4 不挂载；infra 侧 `verify_apigw_shell` 断言不建路由。
 - 部署冒烟：无 Token / 篡改签名 / 过期 Token → 401；合法 ID Token → 401；合法 AccessToken → 200；OPTIONS → 200 + ACAO；Function 行为矩阵全通过。
 - 三仓公开仓约束：禁 `pull_request_target` 带 AWS 凭证、Actions 按 SHA 锁、secret scanning + push protection、sub 用 StringEquals。
 
@@ -1367,7 +1367,7 @@ infra 基座（桶/生命周期/标签 → OAC+CF+Function → Cognito → API G
 
 | 模块 | 内容 | 依赖 | 门禁 |
 |-|-|-|-|
-| B-01 骨架 | 37+1 函数、`live` 别名、环境变量、Layer 引用 | infra IAM/SSM | 冒烟读 `index.parquet` 200 |
+| B-01 骨架 | 按功能拆分的函数、`live` 别名、环境变量、Layer 引用、**按契约注册路由** | infra IAM/SSM | 冒烟读 `index.parquet` 200 |
 | B-02 中间件 | 方案 A claims、8 项校验、401/403 | B-01 | 5 条单测（ID Token/禁用/改密/缺失 authorizer/新 Token） |
 | B-03 错误与 i18n 码表 | `error_codes.py` 全表、`{code,params}`、三语 key 生成 | B-01 | 双向校验；未知码回退 |
 | B-04 存储适配 | `parquet_store`（全量读写+条件写）、`retention`（put/copy） | B-01 | grep 门禁；标签单测 |

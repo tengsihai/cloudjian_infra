@@ -41,8 +41,8 @@ skip-check:
   - CKV_AWS_338
 
   # —— API Gateway（P-06）——
-  # N8（GET /public/notes/{public_token}）刻意 authorization_type=NONE（红线2 公开匿名读）；
-  # 其余路由显式 JWT（verify_routes_structure 断言 ≥30 条），结构门禁兜底
+  # infra 只建 API 壳（无 route/integration）；N8 匿名与其余 JWT 由 backend 注册时保证
+  # （红线 1/2 归 backend CI，契约 §2.6）；verify_apigw_shell 断言 infra 不建路由
   - CKV_AWS_309
   # 访问日志组不做 KMS：与 S3 同口径（方案 12.8 成本模型未含 KMS；CKV_AWS_145 已同因跳过）
   - CKV_AWS_158

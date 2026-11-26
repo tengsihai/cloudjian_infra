@@ -9,4 +9,5 @@ module "iam" {
   logs_bucket_arn       = module.storage.logs_bucket_arn
   cdn_distribution_arn  = module.cdn.distribution_arn
   cognito_user_pool_arn = module.cognito.user_pool_arn
+  api_id                = module.apigw.api_id
 }

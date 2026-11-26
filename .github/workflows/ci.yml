@@ -58,13 +58,12 @@ jobs:
         run: |
           bash scripts/verify_static.sh
           bash scripts/verify_lifecycle_structure.sh
-          bash scripts/verify_routes_structure.sh
+          bash scripts/verify_apigw_shell.sh
           bash scripts/verify_iam_structure.sh
           bash scripts/verify_cognito_structure.sh
           bash scripts/verify_ssm_structure.sh
           bash scripts/verify_scheduler_structure.sh
           bash scripts/verify_observability_structure.sh
-          bash scripts/verify_lambda_inventory.sh
           bash scripts/verify_ci_structure.sh
 
   # —— plan：需要 AWS 凭证，必须 environment: dev（Y1 硬约束）——

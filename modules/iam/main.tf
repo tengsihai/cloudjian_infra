@@ -23,47 +23,7 @@ locals {
   sub_backend   = "repo:tengsihai/cloudjian-backend:environment:dev"
   sub_terraform = "repo:tengsihai/cloudjian-infra:environment:dev"
 
-  # 固定命名（架构 10.4 / 方案 12.3）
-  lambda_function_names = [
-    "cloudjian-notes-list-api",
-    "cloudjian-notes-create-api",
-    "cloudjian-notes-get-api",
-    "cloudjian-notes-update-api",
-    "cloudjian-notes-delete-api",
-    "cloudjian-trash-purge-api",
-    "cloudjian-versions-list-api",
-    "cloudjian-versions-restore-api",
-    "cloudjian-versions-get-api",
-    "cloudjian-search-query-api",
-    "cloudjian-dirs-list-api",
-    "cloudjian-dirs-move-api",
-    "cloudjian-dirs-create-api",
-    "cloudjian-dirs-update-api",
-    "cloudjian-dirs-delete-api",
-    "cloudjian-dirs-restore-api",
-    "cloudjian-jobs-get-api",
-    "cloudjian-notes-visibility-api",
-    "cloudjian-notes-public-get-api",
-    "cloudjian-shares-list-api",
-    "cloudjian-shares-create-api",
-    "cloudjian-shares-revoke-api",
-    "cloudjian-assets-presign-api",
-    "cloudjian-assets-register-api",
-    "cloudjian-assets-url-get-api",
-    "cloudjian-assets-urls-api",
-    "cloudjian-assets-list-api",
-    "cloudjian-admin-users-list-api",
-    "cloudjian-admin-users-create-api",
-    "cloudjian-admin-users-update-api",
-    "cloudjian-admin-users-reset-api",
-    "cloudjian-admin-team-config-get-api",
-    "cloudjian-admin-team-config-put-api",
-    "cloudjian-profile-get-api",
-    "cloudjian-profile-put-api",
-    "cloudjian-exports-create-api",
-    "cloudjian-exports-get-api",
-    "cloudjian-maintenance-api",
-  ]
+  # 函数清单归 backend；infra 只保留固定别名与 maintenance 名
   lambda_alias         = "live"
   maintenance_function = "cloudjian-maintenance-api"
 }
@@ -232,8 +192,8 @@ resource "aws_iam_role_policy" "gha_backend" {
           "lambda:UntagResource",
         ]
         Resource = [
-          for n in local.lambda_function_names :
-          "arn:${local.partition}:lambda:${var.region}:${local.account_id}:function:${n}"
+          "arn:${local.partition}:lambda:${var.region}:${local.account_id}:function:cloudjian-*",
+          "arn:${local.partition}:lambda:${var.region}:${local.account_id}:function:cloudjian-*:*",
         ]
       },
       {
@@ -245,6 +205,29 @@ resource "aws_iam_role_policy" "gha_backend" {
           "lambda:ListLayerVersions",
         ]
         Resource = "arn:${local.partition}:lambda:${var.region}:${local.account_id}:layer:cloudjian-*"
+      },
+      {
+        # 路由与集成归 backend（架构 10.4）：新增接口只改 backend，不动 infra
+        Sid    = "ManageApiRoutes"
+        Effect = "Allow"
+        Action = ["apigateway:GET", "apigateway:POST", "apigateway:PATCH", "apigateway:DELETE"]
+        Resource = [
+          "arn:${local.partition}:apigateway:${var.region}::/apis/${var.api_id}",
+          "arn:${local.partition}:apigateway:${var.region}::/apis/${var.api_id}/*",
+        ]
+      },
+      {
+        # 函数由 backend 创建；日志组用 Lambda 默认组并设 30 天保留（架构 10.7）
+        Sid    = "FunctionLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup", "logs:DescribeLogGroups", "logs:PutRetentionPolicy",
+          "logs:TagLogGroup", "logs:TagResource",
+        ]
+        Resource = [
+          "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/cloudjian-*",
+          "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/cloudjian-*:*",
+        ]
       },
       {
         # 精确到 lambda-role（方案 12.5）

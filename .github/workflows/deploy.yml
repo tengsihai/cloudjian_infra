@@ -71,11 +71,11 @@ jobs:
       - name: Post-apply structure gates
         run: |
           bash scripts/verify_static.sh
-          bash scripts/verify_routes_structure.sh
+          bash scripts/verify_apigw_shell.sh
           bash scripts/verify_ssm_structure.sh
           bash scripts/verify_observability_structure.sh
 
-      # apply 后可跑的 live 断言（SSM / 路由）；函数未就绪时 routes 仍应成立
+      # apply 后可跑的 live 断言（SSM / 路由）；路由由 backend 注册，未注册时 routes 断言可失败
       - name: Live gates (SSM + routes)
         run: |
           bash scripts/verify_ssm_live.sh || true

@@ -1,8 +1,3 @@
-output "log_group_names" {
-  description = "38 个函数日志组（组名 = 函数名，30 天）"
-  value       = sort(values(local.log_groups))
-}
-
 output "alarm_topic_arn" {
   value = aws_sns_topic.alarms.arn
 }

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# P-08 INF-09 结构门禁：38 日志组 30 天、告警面、独立指标、Budgets、成本标签。
+# P-08 INF-09 结构门禁：平台告警面、独立业务指标、Budgets、成本标签。
+# 函数日志组与保留期归 backend；infra 不枚举函数名（新增接口不改 infra）。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,43 +13,41 @@ ok()  { echo "  ok: $*"; }
 
 [[ -f "$TF" ]] || { err "缺少 $TF"; exit 1; }
 
-# 8.5 38 个函数日志组 + 30 天（名字在 variables 默认表，日志组名 = 函数名）
-VARS="$ROOT/modules/observability/variables.tf"
-fn_count=$(grep -cE '^    "cloudjian-[a-z0-9-]+-api",$' "$VARS" || true)
-if [[ "$fn_count" -eq 38 ]]; then
-  ok "函数表 = 38 个（37 接口 + maintenance）"
+# 8.5 不枚举函数；不建函数日志组（由 backend 部署时设 30 天）
+if grep -q 'lambda_function_names\|log_groups' "$TF"; then
+  err "observability 枚举了函数名"
 else
-  err "函数表数量 $fn_count != 38"
+  ok "不枚举函数名"
 fi
-if grep -q 'log_groups = { for fn in var.lambda_function_names : fn => fn }' "$TF"; then
-  ok "日志组名 = 函数名"
+if grep -qE 'resource\s+"aws_cloudwatch_log_group"' "$TF"; then
+  err "observability 建了函数日志组（应归 backend）"
 else
-  err "日志组命名规则缺失"
+  ok "无函数日志组"
 fi
-if grep -q 'retention_in_days = 30' "$TF"; then
-  ok "保留 30 天"
+if grep -q 'lambda_errors' "$TF"; then
+  err "仍有每函数 Errors 告警（应归 backend 或聚合）"
 else
-  err "日志保留不是 30"
+  ok "无每函数 Errors 告警"
+fi
+filter_count=$(grep -cE 'resource\s+"aws_cloudwatch_log_metric_filter"' "$TF" || true)
+if [[ "$filter_count" -eq 1 ]] && grep -q 'resource "aws_cloudwatch_log_metric_filter" "conflict_412"' "$TF"; then
+  ok "仅保留 412 访问日志过滤器"
+else
+  err "日志过滤器数量 $filter_count（应只剩 412）"
 fi
 
 # 8.6 告警面
-for a in api_5xx cdn_5xx conflict_412 publish_failed; do
-  if grep -q "aws_cloudwatch_metric_alarm\" \"$a\"" "$TF" || grep -q "metric_alarm\" \"$a\"" "$TF"; then
+for a in api_5xx cdn_5xx conflict_412 job_running share_revoked publish_failed; do
+  if grep -q "aws_cloudwatch_metric_alarm\" \"$a\"" "$TF"; then
     ok "告警 ${a}"
   else
     err "缺告警 ${a}"
   fi
 done
-# Lambda 错误率：for_each 六函数
-if grep -q 'lambda_errors' "$TF" && grep -q 'for_each = toset(var.lambda_function_names)' "$TF"; then
-  ok "Lambda 错误率按函数"
-else
-  err "缺 Lambda 错误率告警"
-fi
 
-# 8.7 独立指标：JOB_RUNNING / SHARE_REVOKED 存在且非 5xx 命名空间
-if grep -q 'JOB_RUNNING' "$TF" && grep -q 'ShareRevoked' "$TF" && grep -q 'JobRunning' "$TF"; then
-  ok "JOB_RUNNING / SHARE_REVOKED 独立计数"
+# 8.7 独立指标：JOB_RUNNING / SHARE_REVOKED 走 backend EMF 指标
+if grep -q 'JobRunning' "$TF" && grep -q 'ShareRevoked' "$TF"; then
+  ok "JobRunning / ShareRevoked 独立计数"
 else
   err "缺独立业务指标"
 fi
@@ -57,7 +56,6 @@ if grep -q 'metric_name         = "5xx"' "$TF" && grep -q 'NoteConflict412' "$TF
 else
   err "412 未独立"
 fi
-# 5xx 告警不得引用 412/JOB 指标
 if awk '/metric_alarm" "api_5xx"/,/^}/' "$TF" | grep -qE 'NoteConflict412|JobRunning|ShareRevoked'; then
   err "api_5xx 告警混入业务计数"
 else
@@ -77,6 +75,13 @@ for tag in Project Component Environment ManagedBy; do
     err "缺成本标签 ${tag}"
   fi
 done
+
+# 访问日志组 30 天（412 过滤器依赖）
+if grep -q 'retention_in_days = 30' "$ROOT/apigw_logs.tf"; then
+  ok "API 访问日志保留 30 天"
+else
+  err "访问日志保留期不是 30"
+fi
 
 # 根装配 + 变量接线
 if grep -q 'module "observability"' "$ROOT_OBS"; then

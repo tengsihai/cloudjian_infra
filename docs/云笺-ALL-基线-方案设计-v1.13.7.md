@@ -844,7 +844,7 @@ arn:aws:s3:::cloudjian-data-tokyo/users/*/assets/public/*
 
 未用任何 REST 独有能力（无 API Key、无 Usage Plan、无网关缓存、无 WAF、无请求校验器、无流式响应），且导出已改预签名直下 S3，因此切换是纯降价，无功能回退。
 
-HTTP API 的 37 条路由（按域分 8 组；每条路由一个 Lambda，函数清单见契约 §2.6；stage `dev`）：
+HTTP API 的接口路由（按域分组；每条路由一个 Lambda，数量随功能增减，约定见契约 §2.6；stage `dev`；**路由由 backend 部署时注册**）：
 
 | 路由键 | 说明 |
 |---|---|
@@ -877,16 +877,17 @@ HTTP API 的 37 条路由（按域分 8 组；每条路由一个 Lambda，函数
 
 **门禁分工**
 
-- 37 个接口函数的中间件**直接使用 `event.requestContext.authorizer.jwt.claims`（方案 A：信任网关已验签）**，不做本地 JWKS 验签，再查注册表判 `status`/`role`、比 `auth_time`
+- 各接口函数的中间件**直接使用 `event.requestContext.authorizer.jwt.claims`（方案 A：信任网关已验签）**，不做本地 JWKS 验签，再查注册表判 `status`/`role`、比 `auth_time`
 - 为什么删掉「保留本地验签」：claims 是**已解码的集合**、不含原始 JWT，要本地验签必须从 `event.headers.authorization` 重取原始 Token（那是方案 B，每次多一次 JWKS 拉取与解码）。「省一次解码」与「仍做本地验签」互斥，本项目**明确选 A**
 - A 的代价是「漏挂授权器的路由会裸奔」，因此兜底不靠运行时而靠 CI 门禁（下条）；同时中间件必须断言 `requestContext.authorizer` 存在，缺失直接 401
 
 **路由挂载门禁（G4）**
 
-- Terraform 里 8 组业务路由必须显式 `authorization_type = "JWT"`、`authorizer_id` 指向同一个授权器。**HTTP API 路由省略该字段时默认 `NONE`**，属高危默认值，不能靠人工检查
-- infra 流水线执行 `apigatewayv2 get-routes`，逐条断言 8 组路由均为 `JWT` 且 `AuthorizerId` 等于 SSM `/cloudjian/jwt-authorizer-id`；唯一例外是显式声明的 `OPTIONS` 预检路由（`NONE`）
-- `/cloudjian/jwt-authorizer-id` 由此获得**自动化消费者**：既是门禁的期望值来源，也是排障对照值（不再是「诊断用、无人读」）
-- 可另接 AWS Config `API_GWV2_AUTHORIZATION_TYPE_CONFIGURED` 或 Checkov `CKV_AWS_309` 作为第二道视图
+- **路由由 backend 部署时注册**：integration / route / `add-permission` 均在 backend 流水线完成；infra 只建 API 壳（Stage/JWT/CORS），不建路由
+- backend CI 执行 `apigatewayv2 get-routes`，断言：**无 `$default`**；N8 单独 `NONE`；其余路由均为 `JWT` 且 `AuthorizerId` 等于 SSM `/cloudjian/jwt-authorizer-id`；M4 不挂载；maintenance 不暴露
+- **HTTP API 路由省略 `authorization_type` 时默认 `NONE`**，属高危默认值，不能靠人工检查——由上述 CI 兜底
+- infra 侧 `verify_apigw_shell` 断言 TF 不出现 route/integration、不枚举函数名（新增接口不改 infra）
+- `/cloudjian/jwt-authorizer-id` 既是门禁的期望值来源，也是排障对照值
 - `cloudjian-maintenance-api` **不挂 JWT 授权器、不暴露到 HTTP API**（它由 EventBridge Scheduler 用 `cloudjian-scheduler-role` 直调），避免出现「定时任务必须带用户 token」的伪需求
 - 本项目无 WebSocket/实时推送，不存在 `$connect` 授权器这层问题；若日后加实时功能，该链路的 token 校验仍在 `$connect` 函数里，不迁移到 JWT 授权器
 
@@ -965,7 +966,7 @@ arn:aws:lambda:ap-northeast-1:{account}:function:cloudjian-notes-update-api:live
 
 | 契约项 | 固定值 |
 |---|---|
-| 函数名 | 37 个接口函数 + 1 个维护函数；命名 `cloudjian-<域>-<动作>-api`（契约 §2.6），maintenance 承担收件箱对账、契约校验、索引抽查 |
+| 函数名 | 一条路由一个函数（数量随功能增减）；命名 `cloudjian-<域>-<动作>-api`（契约 §2.6），maintenance 承担收件箱对账、契约校验、索引抽查 |
 | 别名 | `live`（API Gateway 集成指向别名 ARN，不指 `$LATEST`） |
 | 执行角色 | `cloudjian-lambda-role` 的 ARN，从 SSM `/cloudjian/lambda-exec-role-arn` 读取 |
 | 运行时 | `python3.14`（2029-06-30 弃用；**Layer 必须用同版本镜像构建**，见下） |
@@ -990,7 +991,7 @@ arn:aws:lambda:ap-northeast-1:{account}:function:cloudjian-notes-update-api:live
 
 **定时任务的归属**（P1-6）：
 
-- 函数名固定为 `cloudjian-maintenance-api`，与其余 37 个接口函数同规则推导 ARN，**infra 只建 EventBridge Scheduler 规则**（目标指向 `...:function:cloudjian-maintenance-api:live`），不建函数
+- 函数名固定为 `cloudjian-maintenance-api`，与接口函数同规则推导 ARN，**infra 只建 EventBridge Scheduler 规则**（目标指向 `...:function:cloudjian-maintenance-api:live`），不建函数
 - 三类调度：`cloudjian-daily-reconcile`（每日，收件箱对账）、`cloudjian-weekly-contract`（每周，契约校验）、`cloudjian-daily-index-check`（每日，索引完整性抽查，只读）
 - 前端触发不了这些任务，全部由 Scheduler 调用，后端函数只负责实现
 - **调度执行角色 `cloudjian-scheduler-role`**（F4）：信任主体 `scheduler.amazonaws.com`，并在信任策略里用 `aws:SourceAccount` + `aws:SourceArn`（限 `cloudjian-*` 调度组）收窄，防止被其他账号的调度服务冒用；权限只有 `lambda:InvokeFunction`，资源锁定 `...:function:cloudjian-maintenance-api:live`（别名 ARN）
@@ -1050,8 +1051,8 @@ feat/xxx ──PR──► dev（合并即部署上线）──PR──► main�
 | 2 | 用 `public.ecr.aws/lambda/python:3.14` 镜像构建 fastparquet/numpy 依赖，产出 Layer zip（**L1 硬校验：`python -c "import sys; assert sys.version_info[:2]==(3,14)"` 后在镜像内 import 一次依赖，版本或 ABI 不符即失败**）；以 lockfile+运行时版本的组合哈希为键缓存在 `deploy/layers/{hash}.zip`，命中即跳过构建（直接控制 CI 分钟数），未命中才编译 |
 | 3 | 业务代码打包为函数 zip（不含依赖） |
 | 4 | 上传 zip 到 `deploy/backend/{sha}.zip` |
-| 5 | 发布 Layer 版本（如变更）→ **创建或更新 38 个函数**（含 `cloudjian-maintenance-api`；名称、运行时、内存超时、环境变量按 12.3 契约）→ 更新代码 → `publish-version` → 切别名 `live` |
-| 6 | 补 `add-permission`，授权 HTTP API（API ID 从 SSM `api-id` 读取）调用 **37 个 HTTP 接口函数**；`cloudjian-maintenance-api` **不挂 API Gateway、不需要 `add-permission`**，其对内调用由 `cloudjian-scheduler-role` 的 IAM 策略承担（F4）。按 12.2 依赖顺序，执行到这一步时 infra 必已完成，**不设「不存在则跳过」分支** |
+| 5 | 发布 Layer 版本（如变更）→ **按契约创建或更新各接口函数**（含 `cloudjian-maintenance-api`；名称、运行时、内存超时、环境变量按 12.3 契约）→ 更新代码 → `publish-version` → 切别名 `live` |
+| 6 | **按契约注册路由与集成**（API ID / AuthorizerId 从 SSM 读取），并补 `add-permission` 授权 HTTP API 调用各接口函数；`cloudjian-maintenance-api` **不挂 API Gateway、不需要 `add-permission`**，其对内调用由 `cloudjian-scheduler-role` 的 IAM 策略承担（F4）。按 12.2 依赖顺序，执行到这一步时 infra 必已完成（API 壳已就绪），**不设「不存在则跳过」分支**；同时为函数日志组设 30 天保留 |
 | 7 | 冒烟：直接 `invoke` 别名跑健康检查路径，断言 200；**另做一次读写烟测——临时 key 固定为 `deploy/smoke/{sha}.txt`（由 CI 的部署角色写删，不放 `users/` 下、不打 `cj:retention`），写后立即删除并断言删除成功（`head-object` 返回 404），失败重试前先清理同前缀残留**；调用 `release` 元数据写回 SSM（**依赖 12.5 backend 角色的 `s3:DeleteObject`**，v1.13.3 K1；缺该权限则删除稳红） |
 | 8 | 失败：别名回指上一版本，输出回滚结果，流水线标红 |
 
@@ -1236,7 +1237,7 @@ ManagedBy   = terraform
 | Terraform 状态桶 | `cloudjian-tfstate-<region>` | `cloudjian-tfstate-tokyo` |
 | S3 顶层前缀 | 固定两类 | `web/`、`users/` |
 | 用户子前缀 | 固定八类 | `notes/`、`trash/`、`versions/`、`assets/`、`shares/`、`search/`、`jobs/`、`exports/` |
-| Lambda 函数 | `cloudjian-<域>-<动作>-api` | 37 个接口函数 + `cloudjian-maintenance-api`（清单见契约 §2.6） |
+| Lambda 函数 | `cloudjian-<域>-<动作>-api` | 按功能拆分（数量随功能增减）+ `cloudjian-maintenance-api`（约定见契约 §2.6） |
 | Lambda Layer | `cloudjian-<用途>-layer` | `cloudjian-parquet-layer` |
 | Lambda 别名 | 固定 `live`，不带环境后缀 | 别名 `live`（12.3 的 ARN 推导依赖此固定值） |
 | API Gateway（HTTP API） | `cloudjian-<用途>` | `cloudjian-api`，Stage `dev`（类型固定 HTTP API，不建 REST API） |
