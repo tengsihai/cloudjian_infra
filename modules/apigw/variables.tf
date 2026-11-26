@@ -21,3 +21,8 @@ variable "cognito_client_id" {
   description = "JWT 授权器 Audience"
   type        = string
 }
+
+variable "access_log_group_arn" {
+  description = "Stage 访问日志组（cloudjian-api-access，30 天）"
+  type        = string
+}

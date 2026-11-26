@@ -99,6 +99,20 @@ resource "aws_apigatewayv2_stage" "dev" {
   name        = "dev"
   auto_deploy = true
 
+  access_log_settings {
+    destination_arn = var.access_log_group_arn
+    format = jsonencode({
+      requestId        = "$context.requestId"
+      ip               = "$context.identity.sourceIp"
+      requestTime      = "$context.requestTime"
+      httpMethod       = "$context.httpMethod"
+      routeKey         = "$context.routeKey"
+      status           = "$context.status"
+      responseLength   = "$context.responseLength"
+      integrationError = "$context.integrationErrorMessage"
+    })
+  }
+
   default_route_settings {
     detailed_metrics_enabled = false
     throttling_burst_limit   = 100
