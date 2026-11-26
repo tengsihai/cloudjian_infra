@@ -1,5 +1,5 @@
 # INF-09 可观测与预算（架构 10.7 / 方案 12.7）
-# - 6 个函数日志组 cloudjian-<fn>-api，保留 30 天（交付说明 8.5 归 INF-09）
+# - 38 个函数各一个日志组，组名与函数同名，保留 30 天（交付说明 8.5 归 INF-09）
 # - 告警：Lambda 错误率、API 5xx、CF 5xx、412 冲突、发布失败、Budgets
 # - JOB_RUNNING / SHARE_REVOKED 独立计数，不进 5xx 口径
 # - Budgets $5/月 80%/100%；Cost Allocation Tags 四键激活
@@ -11,9 +11,9 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
   partition  = data.aws_partition.current.partition
 
-  # 架构 10.7：cloudjian-<函数>-api；函数名已是 cloudjian-<模块>-api
-  # → 日志组 = <函数名>-api（与方案 8.x 审计组 cloudjian-share-api-api 一致）
-  log_groups = { for fn in var.lambda_function_names : fn => "${fn}-api" }
+  # 架构 10.7：一个函数一个日志组，组名 = 函数名
+  # 函数名已是 cloudjian-<域>-<动作>-api，不再拼 -api 后缀
+  log_groups = { for fn in var.lambda_function_names : fn => fn }
 
   alarm_emails = var.budget_alert_emails
 }
@@ -59,7 +59,7 @@ resource "aws_sns_topic_subscription" "alarms_email" {
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   for_each = toset(var.lambda_function_names)
 
-  alarm_name          = "${var.project}-${each.key}-errors"
+  alarm_name          = "${each.key}-errors"
   alarm_description   = "Lambda Errors > 5 / 5min（${each.key}）；未部署期间 notBreaching"
   namespace           = "AWS/Lambda"
   metric_name         = "Errors"
@@ -171,9 +171,12 @@ resource "aws_cloudwatch_metric_alarm" "conflict_412" {
 # 业务侧单行 JSON 打点；infra 只建过滤器 + 计数告警（任务卡死/权限抖动）
 resource "aws_cloudwatch_log_metric_filter" "job_running" {
   for_each = toset([
-    "cloudjian-notes-api-api",
-    "cloudjian-asset-api-api",
-    "cloudjian-export-api-api",
+    "cloudjian-trash-purge-api",
+    "cloudjian-notes-visibility-api",
+    "cloudjian-dirs-move-api",
+    "cloudjian-dirs-delete-api",
+    "cloudjian-dirs-restore-api",
+    "cloudjian-exports-create-api",
   ])
 
   name           = "${var.project}-${each.key}-job-running"
@@ -211,8 +214,8 @@ resource "aws_cloudwatch_metric_alarm" "job_running" {
 }
 
 resource "aws_cloudwatch_log_metric_filter" "share_revoked" {
-  name           = "${var.project}-cloudjian-share-api-api-share-revoked"
-  log_group_name = "cloudjian-share-api-api"
+  name           = "${var.project}-share-revoked"
+  log_group_name = "cloudjian-shares-revoke-api"
   pattern        = "SHARE_REVOKED"
 
   metric_transformation {

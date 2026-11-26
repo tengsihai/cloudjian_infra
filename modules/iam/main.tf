@@ -25,11 +25,43 @@ locals {
 
   # 固定命名（架构 10.4 / 方案 12.3）
   lambda_function_names = [
-    "cloudjian-notes-api",
-    "cloudjian-share-api",
-    "cloudjian-asset-api",
-    "cloudjian-admin-api",
-    "cloudjian-export-api",
+    "cloudjian-notes-list-api",
+    "cloudjian-notes-create-api",
+    "cloudjian-notes-get-api",
+    "cloudjian-notes-update-api",
+    "cloudjian-notes-delete-api",
+    "cloudjian-trash-purge-api",
+    "cloudjian-versions-list-api",
+    "cloudjian-versions-restore-api",
+    "cloudjian-versions-get-api",
+    "cloudjian-search-query-api",
+    "cloudjian-dirs-list-api",
+    "cloudjian-dirs-move-api",
+    "cloudjian-dirs-create-api",
+    "cloudjian-dirs-update-api",
+    "cloudjian-dirs-delete-api",
+    "cloudjian-dirs-restore-api",
+    "cloudjian-jobs-get-api",
+    "cloudjian-notes-visibility-api",
+    "cloudjian-notes-public-get-api",
+    "cloudjian-shares-list-api",
+    "cloudjian-shares-create-api",
+    "cloudjian-shares-revoke-api",
+    "cloudjian-assets-presign-api",
+    "cloudjian-assets-register-api",
+    "cloudjian-assets-url-get-api",
+    "cloudjian-assets-urls-api",
+    "cloudjian-assets-list-api",
+    "cloudjian-admin-users-list-api",
+    "cloudjian-admin-users-create-api",
+    "cloudjian-admin-users-update-api",
+    "cloudjian-admin-users-reset-api",
+    "cloudjian-admin-team-config-get-api",
+    "cloudjian-admin-team-config-put-api",
+    "cloudjian-profile-get-api",
+    "cloudjian-profile-put-api",
+    "cloudjian-exports-create-api",
+    "cloudjian-exports-get-api",
     "cloudjian-maintenance-api",
   ]
   lambda_alias         = "live"
@@ -504,7 +536,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
           "logs:DescribeLogStreams", "logs:TagLogGroup",
         ]
         Resource = [
-          # 默认路径 + 架构 10.7 自定义组 cloudjian-<fn>-api
+          # 默认路径 + 架构 10.7 自定义组（组名 = 函数名）
           "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/cloudjian-*",
           "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/cloudjian-*:*",
           "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:cloudjian-*",

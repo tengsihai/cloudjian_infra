@@ -32,7 +32,7 @@
    - NAT 实例（非 Gateway，省 $41/月）+ 用户数据健康检查；
    - `aws_vpc_endpoint` S3 Gateway Endpoint（路由表挂 `pl-xxxx` 前缀列表）；
    - 输出：`vpc_id`、`public_subnet_ids`、`private_subnet_ids`、`nat_instance_id`、`s3_endpoint_id`；
-3. backend 发布流水线给 6 个函数加 `vpc_config`（业务代码无需改动）；
+3. backend 发布流水线给 38 个函数加 `vpc_config`（业务代码无需改动）；
 4. 演练栈（`cloudjian-drill-*`）先验证，再上 `cloudjian-*`。
 
 成本：约 +$4/月（NAT 实例档）。

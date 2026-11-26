@@ -52,7 +52,7 @@ terraform plan
 4. CDN 白名单只放 `/web/*` 与 `users/*/assets/public/*`，私有路径 403 终态；
 5. TF 不得出现 `aws_lambda_function` / `aws_lambda_layer_version`（含 `aws_lambda_permission`——add-permission 归 backend）。
 
-静态断言：`./scripts/verify_static.sh`（CI 必跑，可本地复跑）。
+静态断言：`./scripts/verify_static.sh`（CI 必跑，可本地复跑）；Lambda 清单一致性：`./scripts/verify_lambda_inventory.sh`。
 
 ## SSM 参数变更触发清单
 
@@ -97,9 +97,9 @@ terraform plan
 
 ### 告警与预算基线（交接 T4）
 
-- 日志组：`cloudjian-<fn>-api` ×6，保留 30 天
+- 日志组：每个函数一个同名日志组 ×38，保留 30 天
 - 告警动作 → SNS `cloudjian-alarms`（邮件订阅 = `budget_alert_emails`）
-- 告警清单：Lambda Errors×6、API 5xx、CF 5xx%、412 冲突、JOB_RUNNING、SHARE_REVOKED、PublishFailed
+- 告警清单：Lambda Errors×38、API 5xx、CF 5xx%、412 冲突、JOB_RUNNING、SHARE_REVOKED、PublishFailed
 - **JOB_RUNNING / SHARE_REVOKED 独立计数，不计入 5xx 口径**
 - Budgets：`cloudjian` $5/月，ACTUAL 80%/100%（有邮箱才挂通知）
 - Cost Allocation Tags：`Project` / `Component` / `Environment` / `ManagedBy` Active

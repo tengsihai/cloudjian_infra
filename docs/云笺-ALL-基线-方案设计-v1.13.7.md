@@ -488,7 +488,7 @@ v1.5 让「共享给我」遍历 `users/*/shares/`，这是新的成本炸弹（
 
 - 编辑中保存：服务端返回 **`403 SHARE_REVOKED`**，**不是 412**——412 的语义是「版本冲突，可走差异面板」，无权限不能给用户「强制覆盖」的按钮；前端保留编辑器中的全部内容，并给「另存为我的笔记」一键转存，避免撤销动作变成内容丢失
 - 只读浏览中：15 分钟缓存到期后页面转只读态并提示「共享已结束」；已在本地渲染的正文不做强制清屏（做不到，也不值得做）
-- 撤销方与被撤销方都写一条审计日志（`share_id`、`action`、`actor`、`target`、`ts`），便于事后对账；**载体定稿（v1.13.3，K4）**：不落 S3，走函数既有 CloudWatch 日志组（`cloudjian-share-api-api`），单行 JSON 结构化输出，保留期沿用 12.7 的 **30 天**——零新增存储、零新增生命周期规则；检索用 CloudWatch Logs Insights 按 `share_id` 或 `actor` 过滤。若日后需要长期留存（>30 天），再单独评估落 S3 与生命周期标签，本期不做
+- 撤销方与被撤销方都写一条审计日志（`share_id`、`action`、`actor`、`target`、`ts`），便于事后对账；**载体定稿（v1.13.3，K4）**：不落 S3，走函数既有 CloudWatch 日志组（`cloudjian-shares-revoke-api`），单行 JSON 结构化输出，保留期沿用 12.7 的 **30 天**——零新增存储、零新增生命周期规则；检索用 CloudWatch Logs Insights 按 `share_id` 或 `actor` 过滤。若日后需要长期留存（>30 天），再单独评估落 S3 与生命周期标签，本期不做
 
 **共享的展示形态（v1.10 定稿，原 17.1）**：别人共享给我的目录，在我侧边栏显示为**一条虚拟目录**（如「共享给我 / 项目A」），不是把内部几百篇笔记摊平成一堆散篇；点进去才展开其真实子结构。单篇共享则显示为一条独立笔记。
 
@@ -844,19 +844,19 @@ arn:aws:s3:::cloudjian-data-tokyo/users/*/assets/public/*
 
 未用任何 REST 独有能力（无 API Key、无 Usage Plan、无网关缓存、无 WAF、无请求校验器、无流式响应），且导出已改预签名直下 S3，因此切换是纯降价，无功能回退。
 
-HTTP API 的 8 组路由（路由键，全部走 Lambda 代理集成，stage `dev`）：
+HTTP API 的 37 条路由（按域分 8 组；每条路由一个 Lambda，函数清单见契约 §2.6；stage `dev`）：
 
-| 路由键 | 目标函数 | 说明 |
-|---|---|---|
-| `GET /notes`、`POST /notes` | `cloudjian-notes-api` | 列表分页 + 新建 |
-| `GET/PUT/DELETE /notes/{note_id}`、**`POST /trash/purge`** | `cloudjian-notes-api` | 读取、`If-Match` 更新、软删除；**回收站彻底删除（单篇/批量/整目录/清空，202 + job）** |
-| `GET /notes/{note_id}/versions`、`POST /notes/{note_id}/versions/{ts}/restore` | `cloudjian-notes-api` | 版本列表与回滚 |
-| `POST /notes/{note_id}/visibility`、`GET /public/notes/{public_token}` | `cloudjian-notes-api` | 笔记可见性切换（仅 owner，202 + `visibility_migrate` job，见 8.1）；**公开笔记匿名只读**（无鉴权路由，持 token 即可读，只返回该篇内容与图片直链） |
-| `GET /search`、`GET /dirs`、`POST /dirs/move` | `cloudjian-notes-api` | 搜索、目录树、可续跑搬移 |
-| `GET/POST/DELETE /shares` | `cloudjian-share-api` | 共享授权与撤销 |
-| `POST /assets/presign`、`POST /assets/register`、`GET /assets/{asset_id}/url`、`POST /assets/urls` | `cloudjian-asset-api` | 直传签名（`presign` 按**笔记当前可见性**决定 `public/` 或 `private/` 前缀、锁 Content-Type；不含可见性参数）、登记、**单张换签**（`GET …/url?note_id=…`）、**批量换签**（`POST /assets/urls`，body `{note_id, asset_ids[]}`，≤50 张） |
-| `GET/POST/PATCH/DELETE /admin/users`、`POST /admin/users/{sub}/reset` | `cloudjian-admin-api` | 开号、禁用、调角色、重置密码 |
-| `POST /exports`、`GET /exports/{job_id}` | `cloudjian-export-api` | 单篇/批量导出与任务查询 |
+| 路由键 | 说明 |
+|---|---|
+| `GET /notes`、`POST /notes` | 列表分页 + 新建 |
+| `GET/PUT/DELETE /notes/{note_id}`、**`POST /trash/purge`** | 读取、`If-Match` 更新、软删除；**回收站彻底删除（单篇/批量/整目录/清空，202 + job）** |
+| `GET /notes/{note_id}/versions`、`POST /notes/{note_id}/versions/{ts}/restore` | 版本列表与回滚 |
+| `POST /notes/{note_id}/visibility`、`GET /public/notes/{public_token}` | 笔记可见性切换（仅 owner，202 + `visibility_migrate` job，见 8.1）；**公开笔记匿名只读**（无鉴权路由，持 token 即可读，只返回该篇内容与图片直链） |
+| `GET /search`、`GET /dirs`、`POST /dirs/move` | 搜索、目录树、可续跑搬移 |
+| `GET/POST/DELETE /shares` | 共享授权与撤销 |
+| `POST /assets/presign`、`POST /assets/register`、`GET /assets/{asset_id}/url`、`POST /assets/urls` | 直传签名（`presign` 按**笔记当前可见性**决定 `public/` 或 `private/` 前缀、锁 Content-Type；不含可见性参数）、登记、**单张换签**（`GET …/url?note_id=…`）、**批量换签**（`POST /assets/urls`，body `{note_id, asset_ids[]}`，≤50 张） |
+| `GET/POST/PATCH/DELETE /admin/users`、`POST /admin/users/{sub}/reset` | 开号、禁用、调角色、重置密码 |
+| `POST /exports`、`GET /exports/{job_id}` | 单篇/批量导出与任务查询 |
 
 **网关鉴权：原生 JWT 授权器（v1.9）**
 
@@ -877,7 +877,7 @@ HTTP API 的 8 组路由（路由键，全部走 Lambda 代理集成，stage `de
 
 **门禁分工**
 
-- 5 个业务函数的中间件**直接使用 `event.requestContext.authorizer.jwt.claims`（方案 A：信任网关已验签）**，不做本地 JWKS 验签，再查注册表判 `status`/`role`、比 `auth_time`
+- 37 个接口函数的中间件**直接使用 `event.requestContext.authorizer.jwt.claims`（方案 A：信任网关已验签）**，不做本地 JWKS 验签，再查注册表判 `status`/`role`、比 `auth_time`
 - 为什么删掉「保留本地验签」：claims 是**已解码的集合**、不含原始 JWT，要本地验签必须从 `event.headers.authorization` 重取原始 Token（那是方案 B，每次多一次 JWKS 拉取与解码）。「省一次解码」与「仍做本地验签」互斥，本项目**明确选 A**
 - A 的代价是「漏挂授权器的路由会裸奔」，因此兜底不靠运行时而靠 CI 门禁（下条）；同时中间件必须断言 `requestContext.authorizer` 存在，缺失直接 401
 
@@ -953,7 +953,7 @@ infra（首次 apply：桶、Cognito、API GW 路由、IAM、SSM）
 难点是 API Gateway 的集成需要函数 ARN，而 infra 不能等后端先建函数，否则首次部署死循环。解决方式是**用固定命名把 ARN 变成可推导字符串**：
 
 ```
-arn:aws:lambda:ap-northeast-1:{account}:function:cloudjian-notes-api:live
+arn:aws:lambda:ap-northeast-1:{account}:function:cloudjian-notes-update-api:live
 ```
 
 - 函数名与别名由第 13 章命名规范固定，infra 直接在 Terraform 里拼出 ARN 字符串
@@ -965,7 +965,7 @@ arn:aws:lambda:ap-northeast-1:{account}:function:cloudjian-notes-api:live
 
 | 契约项 | 固定值 |
 |---|---|
-| 函数名 | `cloudjian-notes-api`、`cloudjian-share-api`、`cloudjian-asset-api`、`cloudjian-admin-api`、`cloudjian-export-api`、`cloudjian-maintenance-api`（定时任务入口：收件箱对账、契约校验、索引重建） |
+| 函数名 | 37 个接口函数 + 1 个维护函数；命名 `cloudjian-<域>-<动作>-api`（契约 §2.6），maintenance 承担收件箱对账、契约校验、索引抽查 |
 | 别名 | `live`（API Gateway 集成指向别名 ARN，不指 `$LATEST`） |
 | 执行角色 | `cloudjian-lambda-role` 的 ARN，从 SSM `/cloudjian/lambda-exec-role-arn` 读取 |
 | 运行时 | `python3.14`（2029-06-30 弃用；**Layer 必须用同版本镜像构建**，见下） |
@@ -990,7 +990,7 @@ arn:aws:lambda:ap-northeast-1:{account}:function:cloudjian-notes-api:live
 
 **定时任务的归属**（P1-6）：
 
-- 函数名固定为 `cloudjian-maintenance-api`，与其余 5 个同规则推导 ARN，**infra 只建 EventBridge Scheduler 规则**（目标指向 `...:function:cloudjian-maintenance-api:live`），不建函数
+- 函数名固定为 `cloudjian-maintenance-api`，与其余 37 个接口函数同规则推导 ARN，**infra 只建 EventBridge Scheduler 规则**（目标指向 `...:function:cloudjian-maintenance-api:live`），不建函数
 - 三类调度：`cloudjian-daily-reconcile`（每日，收件箱对账）、`cloudjian-weekly-contract`（每周，契约校验）、`cloudjian-daily-index-check`（每日，索引完整性抽查，只读）
 - 前端触发不了这些任务，全部由 Scheduler 调用，后端函数只负责实现
 - **调度执行角色 `cloudjian-scheduler-role`**（F4）：信任主体 `scheduler.amazonaws.com`，并在信任策略里用 `aws:SourceAccount` + `aws:SourceArn`（限 `cloudjian-*` 调度组）收窄，防止被其他账号的调度服务冒用；权限只有 `lambda:InvokeFunction`，资源锁定 `...:function:cloudjian-maintenance-api:live`（别名 ARN）
@@ -1050,8 +1050,8 @@ feat/xxx ──PR──► dev（合并即部署上线）──PR──► main�
 | 2 | 用 `public.ecr.aws/lambda/python:3.14` 镜像构建 fastparquet/numpy 依赖，产出 Layer zip（**L1 硬校验：`python -c "import sys; assert sys.version_info[:2]==(3,14)"` 后在镜像内 import 一次依赖，版本或 ABI 不符即失败**）；以 lockfile+运行时版本的组合哈希为键缓存在 `deploy/layers/{hash}.zip`，命中即跳过构建（直接控制 CI 分钟数），未命中才编译 |
 | 3 | 业务代码打包为函数 zip（不含依赖） |
 | 4 | 上传 zip 到 `deploy/backend/{sha}.zip` |
-| 5 | 发布 Layer 版本（如变更）→ **创建或更新 6 个函数**（含 `cloudjian-maintenance-api`；名称、运行时、内存超时、环境变量按 12.3 契约）→ 更新代码 → `publish-version` → 切别名 `live` |
-| 6 | 补 `add-permission`，授权 HTTP API（API ID 从 SSM `api-id` 读取）调用 **5 个 HTTP 接口函数**；`cloudjian-maintenance-api` **不挂 API Gateway、不需要 `add-permission`**，其对内调用由 `cloudjian-scheduler-role` 的 IAM 策略承担（F4）。按 12.2 依赖顺序，执行到这一步时 infra 必已完成，**不设「不存在则跳过」分支** |
+| 5 | 发布 Layer 版本（如变更）→ **创建或更新 38 个函数**（含 `cloudjian-maintenance-api`；名称、运行时、内存超时、环境变量按 12.3 契约）→ 更新代码 → `publish-version` → 切别名 `live` |
+| 6 | 补 `add-permission`，授权 HTTP API（API ID 从 SSM `api-id` 读取）调用 **37 个 HTTP 接口函数**；`cloudjian-maintenance-api` **不挂 API Gateway、不需要 `add-permission`**，其对内调用由 `cloudjian-scheduler-role` 的 IAM 策略承担（F4）。按 12.2 依赖顺序，执行到这一步时 infra 必已完成，**不设「不存在则跳过」分支** |
 | 7 | 冒烟：直接 `invoke` 别名跑健康检查路径，断言 200；**另做一次读写烟测——临时 key 固定为 `deploy/smoke/{sha}.txt`（由 CI 的部署角色写删，不放 `users/` 下、不打 `cj:retention`），写后立即删除并断言删除成功（`head-object` 返回 404），失败重试前先清理同前缀残留**；调用 `release` 元数据写回 SSM（**依赖 12.5 backend 角色的 `s3:DeleteObject`**，v1.13.3 K1；缺该权限则删除稳红） |
 | 8 | 失败：别名回指上一版本，输出回滚结果，流水线标红 |
 
@@ -1124,7 +1124,7 @@ feat/xxx ──PR──► dev（合并即部署上线）──PR──► main�
 
 ### 12.7 可观测性与备份
 
-- CloudWatch Logs 保留期 **30 天**，日志组名 `cloudjian-<函数>-api`；**审计类事件（共享授权/撤销等）同为该组内的结构化 JSON 行**，不另建存储（v1.13.3，K4）
+- CloudWatch Logs 保留期 **30 天**，日志组名与函数同名（`cloudjian-<域>-<动作>-api`）；**审计类事件（共享授权/撤销等）同为该组内的结构化 JSON 行**，不另建存储（v1.13.3，K4）
 - 告警：Lambda 错误率、API 5xx、CloudFront 5xx、412 冲突率异常、后端发布失败、Budgets 超阈值
 - AWS Budgets 阈值 $5/月（**仅覆盖 AWS 侧**），80% 邮件提醒，100% 再提醒；GitHub Actions 在三仓公开后免费（标准 runner 不消耗额度），无需单独预算；若日后改回 private，再设 spending limit $10
 - 激活 Cost Allocation Tags（`Project/Component/Environment/ManagedBy`），否则账单无法按项目归集
@@ -1236,7 +1236,7 @@ ManagedBy   = terraform
 | Terraform 状态桶 | `cloudjian-tfstate-<region>` | `cloudjian-tfstate-tokyo` |
 | S3 顶层前缀 | 固定两类 | `web/`、`users/` |
 | 用户子前缀 | 固定八类 | `notes/`、`trash/`、`versions/`、`assets/`、`shares/`、`search/`、`jobs/`、`exports/` |
-| Lambda 函数 | `cloudjian-<模块>-api` | `cloudjian-notes-api`、`cloudjian-share-api`、`cloudjian-asset-api`、`cloudjian-admin-api`、`cloudjian-export-api`、`cloudjian-maintenance-api` |
+| Lambda 函数 | `cloudjian-<域>-<动作>-api` | 37 个接口函数 + `cloudjian-maintenance-api`（清单见契约 §2.6） |
 | Lambda Layer | `cloudjian-<用途>-layer` | `cloudjian-parquet-layer` |
 | Lambda 别名 | 固定 `live`，不带环境后缀 | 别名 `live`（12.3 的 ARN 推导依赖此固定值） |
 | API Gateway（HTTP API） | `cloudjian-<用途>` | `cloudjian-api`，Stage `dev`（类型固定 HTTP API，不建 REST API） |
@@ -1253,7 +1253,7 @@ ManagedBy   = terraform
 
 > 注：S3 桶名全球唯一，若 `cloudjian-data-tokyo` 已被占用，统一追加账号短号（如 `cloudjian-data-tokyo-a1b2`），规则不变。
 
-**环境后缀规则（v1.11 简化后取消）**：只有一个环境，资源名统一为 `cloudjian-<用途>`，**不再有 `-dev`/`-staging`/`-prod` 后缀**，第 2–11 章出现的 `cloudjian-data-tokyo`、`cloudjian-notes-api`、`cloudjian-api` 即是线上实体。SSM 参数也不带环境段（`/cloudjian/<key>`）。若日后恢复多环境，再按当时方案加后缀，不做预留。
+**环境后缀规则（v1.11 简化后取消）**：只有一个环境，资源名统一为 `cloudjian-<用途>`，**不再有 `-dev`/`-staging`/`-prod` 后缀**，第 2–11 章出现的 `cloudjian-data-tokyo`、`cloudjian-notes-list-api`、`cloudjian-api` 即是线上实体。SSM 参数也不带环境段（`/cloudjian/<key>`）。若日后恢复多环境，再按当时方案加后缀，不做预留。
 
 ### 13.3 代码与文件命名
 
@@ -1273,7 +1273,7 @@ ManagedBy   = terraform
 
 - CloudWatch 日志按 `cloudjian-*` 前缀即可整体筛出所有调用
 - Terraform 资源名由变量拼接，避免手写拼错
-- 看到 `cloudjian-share-api` 就能定位到第 7 章，命名即文档
+- 看到 `cloudjian-shares-revoke-api` 就能定位到第 7 章，命名即文档
 - 单环境，无「新开测试环境」的标准动作；若临时演练，按 12.8 另起一套栈并在结束时连同 SSM 参数销毁
 
 ---
@@ -1596,7 +1596,7 @@ ManagedBy   = terraform
 
 | # | 项 | 内容 |
 |---|---|---|
-| Z1 | 后端 | 6 个 Lambda 全部 `python3.14`；Layer 由 `public.ecr.aws/lambda/python:3.14` 构建，**runtime 与 Layer 同版本是硬约束**（跨版本会 `ModuleNotFoundError` 或 C 扩展 ABI 不匹配） |
+| Z1 | 后端 | 全部 Lambda `python3.14`；Layer 由 `public.ecr.aws/lambda/python:3.14` 构建，**runtime 与 Layer 同版本是硬约束**（跨版本会 `ModuleNotFoundError` 或 C 扩展 ABI 不匹配） |
 | Z2 | 前端 | 构建期 Node.js 24 LTS；`.nvmrc`=`24`、`engines` 锁 `>=24 <25`、CI `node-version: 24`，三处一致防“本地能跑 CI 挂” |
 | Z3 | 缓存键 | Layer 缓存键改为 `hash(requirements.lock + runtime_version)`，升级 Python 自动失效旧缓存，不会误用 3.12 产物 |
 | Z4 | 冒烟 | 部署后在别名上跑一次真实调用（读一次 `index.parquet`），确认 `fastparquet`/`numpy` 在 3.14 下可加载；写侧烟测用 **`deploy/smoke/{sha}.txt`**（CI 部署角色写、写后即删并断言 404），不写 `users/`、不带标签、不留孤儿（H4） |

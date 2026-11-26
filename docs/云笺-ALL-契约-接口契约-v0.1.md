@@ -1,5 +1,7 @@
 # 云笺 CloudJian — 共同接口契约 v0.1
 
+> **2026-11-26 修订**：§2.6 改为**一条路由一个函数**（37 个接口函数 + 1 个维护函数）；字段、路由键、错误码未变。
+
 > **新人入口**：[docs/README.md](README.md)。本文是字段/路由/错误码**唯一真源**。
 
 > 读者：T1 基础设施 / T2 后端 / T3 前端 / T4 质量。**四个团队只以本文对齐字段、路由、错误码；本文与代码不一致视为缺陷。**
@@ -92,15 +94,57 @@
 | P1 | GET | `/profile` | — | `{ui_lang,tz,theme,editor_mode,list_sort,page_size}` + ETag |
 | P2 | PUT | `/profile` | 6 项子集（`page_size`∈{20,50,100}） | 200 + ETag |
 
-### 2.6 路由 → 函数
+### 2.6 路由 → 函数（一条路由一个函数）
 
-| 函数 | 路由组 |
-|-|-|
-| `cloudjian-notes-api` | 2.1 全部（含 N8 匿名子路由）+ 2.2 全部 + J1 |
-| `cloudjian-share-api` | 2.3 |
-| `cloudjian-asset-api` | 2.4 |
-| `cloudjian-admin-api` | M1–M7、P1/P2（或独立 profile） |
-| `cloudjian-export-api` | E1/E2 |
+| # | 方法 | 路径 | 鉴权 | 函数（别名 `live`） |
+|-|-|-|-|-|
+| N1 | GET | `/notes` | JWT | `cloudjian-notes-list-api` |
+| N2 | POST | `/notes` | JWT | `cloudjian-notes-create-api` |
+| N3 | GET | `/notes/{note_id}` | JWT | `cloudjian-notes-get-api` |
+| N4 | PUT | `/notes/{note_id}` | JWT | `cloudjian-notes-update-api` |
+| N5 | DELETE | `/notes/{note_id}` | JWT | `cloudjian-notes-delete-api` |
+| N6 | POST | `/trash/purge` | JWT | `cloudjian-trash-purge-api` |
+| V1 | GET | `/notes/{note_id}/versions` | JWT | `cloudjian-versions-list-api` |
+| V2 | POST | `/notes/{note_id}/versions/{ts}/restore` | JWT | `cloudjian-versions-restore-api` |
+| V3 | GET | `/notes/{note_id}/versions/{ts}` | JWT | `cloudjian-versions-get-api` |
+| S1 | GET | `/search` | JWT | `cloudjian-search-query-api` |
+| S2 | GET | `/dirs` | JWT | `cloudjian-dirs-list-api` |
+| S3 | POST | `/dirs/move` | JWT | `cloudjian-dirs-move-api` |
+| S4 | POST | `/dirs` | JWT | `cloudjian-dirs-create-api` |
+| S5 | PATCH | `/dirs` | JWT | `cloudjian-dirs-update-api` |
+| S6 | DELETE | `/dirs` | JWT | `cloudjian-dirs-delete-api` |
+| S7（派生） | POST | `/dirs/restore` | JWT | `cloudjian-dirs-restore-api` |
+| J1 | GET | `/jobs/{job_id}` | JWT | `cloudjian-jobs-get-api` |
+| N7 | POST | `/notes/{note_id}/visibility` | JWT | `cloudjian-notes-visibility-api` |
+| N8 | GET | `/public/notes/{public_token}` | 匿名 | `cloudjian-notes-public-get-api`（NONE） |
+| H1 | GET | `/shares` | JWT | `cloudjian-shares-list-api` |
+| H2 | POST | `/shares` | JWT | `cloudjian-shares-create-api` |
+| H3 | DELETE | `/shares/{share_id}` | JWT | `cloudjian-shares-revoke-api` |
+| A1 | POST | `/assets/presign` | JWT | `cloudjian-assets-presign-api` |
+| A2 | POST | `/assets/register` | JWT | `cloudjian-assets-register-api` |
+| A3 | GET | `/assets/{asset_id}/url` | JWT | `cloudjian-assets-url-get-api` |
+| A4 | POST | `/assets/urls` | JWT | `cloudjian-assets-urls-api` |
+| A5 | GET | `/assets` | JWT | `cloudjian-assets-list-api` |
+| M1 | GET | `/admin/users` | JWT | `cloudjian-admin-users-list-api` |
+| M2 | POST | `/admin/users` | JWT | `cloudjian-admin-users-create-api` |
+| M3 | PATCH | `/admin/users/{sub}` | JWT | `cloudjian-admin-users-update-api` |
+| M5 | POST | `/admin/users/{sub}/reset` | JWT | `cloudjian-admin-users-reset-api` |
+| M6 | GET | `/admin/team-config` | JWT | `cloudjian-admin-team-config-get-api` |
+| M7 | PUT | `/admin/team-config` | JWT | `cloudjian-admin-team-config-put-api` |
+| P1 | GET | `/profile` | JWT | `cloudjian-profile-get-api` |
+| P2 | PUT | `/profile` | JWT | `cloudjian-profile-put-api` |
+| E1 | POST | `/exports` | JWT | `cloudjian-exports-create-api` |
+| E2 | GET | `/exports/{job_id}` | JWT | `cloudjian-exports-get-api` |
+| — | — | 3 条 EventBridge 调度 | 无 | `cloudjian-maintenance-api`（不挂网关） |
+
+> **M4 `DELETE /admin/users/{sub}` 不挂载**（路由不存在，故不入表）。
+
+约定：
+
+- **一条路由一个函数**：37 个接口函数，每个只接一条路由；禁止多路由共用函数（CI 门禁：`verify_routes_structure.sh` + `verify_lambda_inventory.sh`）。
+- 命名 `cloudjian-<域>-<动作>-api`；别名固定 `live`；一个函数一个同名日志组（保留 30 天）。
+- N8 `GET /public/notes/{public_token}` 是唯一匿名路由，单独 NONE；`cloudjian-maintenance-api` 不建集成、不暴露。
+- 新增/删除路由必须同时增减函数，并同步本表与两个门禁脚本。
 
 > N8 必须**单独注册为无鉴权路由**（not 挂 JWT authorizer），且不得与 `/notes/{note_id}` 混在同一路径模板下。
 

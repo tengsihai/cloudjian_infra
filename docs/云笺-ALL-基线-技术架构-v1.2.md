@@ -1,5 +1,7 @@
 # 云笺（CloudJian）技术架构文档 v1.2
 
+> **2026-11-26 修订（正文已同步）**：Lambda 由 6 个按域合并改为**一条路由一个函数**（37 个接口函数 + 1 个维护函数），逐条清单见契约 §2.6；字段、路由键、错误码未变。
+
 > **新人入口**：先读 [docs/README.md](README.md)（阅读顺序 + 当前有效版本）。
 > 变更史见 [云笺-修订史归档.md](云笺-修订史归档.md)；**实现只认正文**。
 
@@ -56,7 +58,7 @@ flowchart LR
   B -->|"业务 API + AccessToken"| APIG["HTTP API<br/>JWT 授权器"]
   B -->|"预签名 PUT / GET"| S3["S3 数据桶<br/>cloudjian-data-tokyo"]
   CF -->|"OAC"| S3
-  APIG --> L["Lambda 6 个函数<br/>别名 live"]
+  APIG --> L["Lambda 37 + 1<br/>一路由一函数"]
   L --> S3
   L --> COG["Cognito 用户池"]
   L --> CW["CloudWatch Logs<br/>30 天"]
@@ -74,7 +76,7 @@ flowchart LR
 | CloudFront + Function | 静态资源与公开图分发；路径白名单、SPA rewrite、私有路径终态 403 | 不做鉴权（Function 无网络、无法验 JWT） |
 | S3 数据桶 | 全部业务数据与静态产物；条件写与版本兜底 | 不承担访问控制以外的权限判断 |
 | HTTP API | 路由、JWT 授权器前置过滤、CORS 预检、512KB 计量 | 不区分 Access/ID Token（见 4.3） |
-| Lambda（6 函数） | 业务逻辑、注册表与权限判定、Parquet 读写、异步 job | 不做 JWKS 验签；不自造 CORS 头 |
+| Lambda（37 接口函数 + 1 维护） | 每个函数只接一条路由；业务逻辑、注册表与权限判定、Parquet 读写、异步 job | 不做 JWKS 验签；不自造 CORS 头 |
 | Cognito | 账号、SRP 登录、Token 签发、Group、禁用/重置 | 不作为权限真源（role 以注册表为准） |
 | Scheduler | 三个定时任务（对账、契约校验、索引抽查） | 不承载用户请求 |
 | SSM | 三仓参数总线（桶、域名、API、池、角色） | 不存业务数据 |
@@ -103,7 +105,7 @@ flowchart LR
 
 | 层 | 版本 | 落地约束 |
 |-|-|-|
-| Lambda 运行时 | `python3.14`（Amazon Linux 2023，弃用日 2029-06-30） | 6 个函数全部同版本；不得混用 3.12 |
+| Lambda 运行时 | `python3.14`（Amazon Linux 2023，弃用日 2029-06-30） | 全部函数同版本；不得混用 3.12 |
 | Parquet Layer | 构建镜像 `public.ecr.aws/lambda/python:3.14` | 与 runtime **同版本同 ABI**，跨版本会 `ModuleNotFoundError` 或 C 扩展 ABI 不匹配 |
 | 前端构建 | Node.js 24 LTS | `.nvmrc`=24、`package.json engines`=`>=24 <25`、CI `node-version: 24` 三处一致 |
 | 依赖 | fastparquet + python-snappy（含 numpy/pandas/cramjam） | Layer 压缩后数十 MB，冷启动 +80–150ms（待实测） |
@@ -121,11 +123,11 @@ flowchart LR
 
 | 项 | 值 |
 |-|-|
-| 函数名 | `cloudjian-notes-api`、`cloudjian-share-api`、`cloudjian-asset-api`、`cloudjian-admin-api`、`cloudjian-export-api`、`cloudjian-maintenance-api` |
+| 函数名 | 37 个接口函数 + 1 个维护函数；命名 `cloudjian-<域>-<动作>-api`；逐条清单见契约 §2.6 |
 | 别名 | `live`（集成指向别名 ARN，不指 `$LATEST`） |
 | 环境变量 | `CJ_BUCKET`、`CJ_REGION`、`CJ_USER_POOL_ID`、`CJ_LAYER_MODE=parquet` |
 | 执行角色 | `cloudjian-lambda-role`（ARN 从 `/cloudjian/lambda-exec-role-arn` 读） |
-| 日志组 | `cloudjian-<函数>-api`，保留 30 天 |
+| 日志组 | 与函数同名（`cloudjian-<域>-<动作>-api`），保留 30 天 |
 
 #### 契约/门禁
 
@@ -270,24 +272,30 @@ sequenceDiagram
 | CORS | 网关 `AllowOrigins`=CDN 域名、`AllowMethods`=GET/POST/PUT/PATCH/DELETE/OPTIONS、`AllowHeaders`=authorization/content-type/if-match、`ExposeHeaders`=etag、`MaxAge`=600；Lambda 不输出 CORS 头 |
 | 幂等 | `POST /assets/register` 按 `asset_id` 幂等；共享收件箱条件写 + 指数退避；job 按 `cursor` 续跑；**purge 靠 `purged[]` + `DeleteObject` 幂等**（9.3.1） |
 
-### 5.0.1 八组路由 → 目标函数
+### 5.0.1 路由 → 目标函数（一条路由一个函数）
 
-> v1.2 补充：`GET /public/notes/{public_token}` 是**无鉴权路由**（不挂 JWT 授权器），挂在 notes-api 同一函数上，由函数内部按 token 只读返回；其余路由全部需要登录。
+> **2026-11-26 架构变更**：Lambda 由「6 个按域合并」改为「一条路由一个函数」，共 **37 个接口函数 + 1 个维护函数**；函数名 `cloudjian-<域>-<动作>-api`，别名固定 `live`。逐条映射以 [契约 §2.6](云笺-ALL-契约-接口契约-v0.1.md) 为准，CI 门禁 `verify_routes_structure.sh` / `verify_lambda_inventory.sh` 保证 1:1。
+>
+> `GET /public/notes/{public_token}` 是**无鉴权路由**（不挂 JWT 授权器），由 `cloudjian-notes-public-get-api` 按 token 只读返回；其余路由全部需要登录。
 
-| 组 | 路由键 | 目标函数（别名 `live`） |
+| 域 | 函数数 | 名称前缀 |
 |-|-|-|
-| 1 | `GET /notes`、`POST /notes` | `cloudjian-notes-api` |
-| 2 | `GET /notes/{note_id}`、`PUT /notes/{note_id}`、`DELETE /notes/{note_id}`、**`POST /trash/purge`** | `cloudjian-notes-api` |
-| 3 | `GET /notes/{note_id}/versions`、`POST /notes/{note_id}/versions/{ts}/restore` | `cloudjian-notes-api` |
-| 4 | `GET /search`、`GET /dirs`、`POST /dirs/move` | `cloudjian-notes-api` |
-| 5 | `GET /shares`、`POST /shares`、`DELETE /shares/{share_id}` | `cloudjian-share-api` |
-| 6 | `POST /assets/presign`、`POST /assets/register`、`GET /assets/{asset_id}/url`、`POST /assets/urls` | `cloudjian-asset-api` |
-| 7 | `GET /admin/users`、`POST /admin/users`、`PATCH /admin/users/{sub}`、`POST /admin/users/{sub}/reset` | `cloudjian-admin-api` |
-| 8 | `POST /exports`、`GET /exports/{job_id}` | `cloudjian-export-api` |
+| 笔记 | 7 | `cloudjian-notes-*` |
+| 回收站 | 1 | `cloudjian-trash-purge-api` |
+| 版本 | 3 | `cloudjian-versions-*` |
+| 搜索 | 1 | `cloudjian-search-query-api` |
+| 目录 | 6 | `cloudjian-dirs-*` |
+| 任务查询 | 1 | `cloudjian-jobs-get-api` |
+| 共享 | 3 | `cloudjian-shares-*` |
+| 图床 | 5 | `cloudjian-assets-*` |
+| 管理 | 6 | `cloudjian-admin-*` |
+| 个人设置 | 2 | `cloudjian-profile-*` |
+| 导出 | 2 | `cloudjian-exports-*` |
+| 运维 | 1 | `cloudjian-maintenance-api`（定时，不挂网关） |
 
 【派生】路由（页面清单 v0.5 已冻结页面行为，但以下路由键不在 12.1；须随首个接口 PR 定稿后并组）：`GET/POST/PATCH/DELETE /dirs`、`POST /dirs/restore`（组 4）、`GET /jobs/{job_id}`（组 4）、`GET/PUT /profile`（组 7 或独立）、`GET/PUT /admin/team-config`（组 7）、`GET /assets`（组 6）、`GET /notes/{note_id}/versions/{ts}`（组 3）。**冻结的是「页面要什么」，不是「路由长什么样」**——后者由 12.3 的 TODO-API-02/03/04/05/09/10/12 收口。
 
-### 5.1 笔记与列表（notes-api）
+### 5.1 笔记与列表
 
 | # | 方法 | 路径 | 入参 | 出参 | 错误码 | ETag 位置 | 分页 |
 |-|-|-|-|-|-|-|-|
@@ -310,7 +318,7 @@ sequenceDiagram
 
 要点：新建同目录重名自动追加 `-1/-2`，**不返回冲突错误**；`note_id` 为 ULID，由服务端生成，`slug` 仅文件名。
 
-### 5.2 版本（notes-api）
+### 5.2 版本
 
 | # | 方法 | 路径 | 入参 | 出参 | 错误码 | ETag | 分页 |
 |-|-|-|-|-|-|-|-|
@@ -320,7 +328,7 @@ sequenceDiagram
 
 **TODO-API-09**：方案 6.4 要求「与当前版本对比」、PRD P-06 有对比态，但 12.1 未列版本内容读取/对比路由。V3 为【派生】最小实现（前端复用 `react-diff-view` 本地比对），须随首个接口 PR 定稿（P-06 已是冻结页面）。
 
-### 5.3 搜索与目录（notes-api）
+### 5.3 搜索与目录
 
 | # | 方法 | 路径 | 入参 | 出参 | 错误码 | ETag | 分页 |
 |-|-|-|-|-|-|-|-|
@@ -333,7 +341,7 @@ sequenceDiagram
 
 **TODO-API-02（P1）**：方案 6.1 明确目录「新建、重命名、移动、删除」，但 12.1 的 8 组路由只有 `GET /dirs` 与 `POST /dirs/move`。S4–S6 为【派生】，删除目录复用搬移 job 机制（`type=trash_dir`）。必须随首个接口 PR 定稿路由键，避免与 `POST /dirs/move` 冲突。
 
-### 5.4 共享（share-api）
+### 5.4 共享
 
 | # | 方法 | 路径 | 入参 | 出参 | 错误码 | ETag | 分页 |
 |-|-|-|-|-|-|-|-|
@@ -345,7 +353,7 @@ sequenceDiagram
 
 成员选择：共享面板读 `_registry.parquet` 的 `username/user_uuid/role` 做**成员列表 + 前缀搜索**，不显示在线状态；仅允许 `status=active` 且不等于本人。**TODO-API-08**：成员搜索是否需要独立 `GET /admin/users?q=`（admin 专属）还是复用 `GET /users?q=`（普通用户只读子集，仅返回 username+uuid），PRD P-09 未定义 → 倾向前者复用 admin 只读投影，避免新开用户目录接口。
 
-### 5.5 图床（asset-api）
+### 5.5 图床
 
 | # | 方法 | 路径 | 入参 | 出参 | 错误码 | ETag | 分页 |
 |-|-|-|-|-|-|-|-|
@@ -359,7 +367,7 @@ sequenceDiagram
 
 `presign` 的职责边界（K2；v1.2 调整）：**按笔记当前 `visibility` 决定目标前缀、锁 Content-Type、校验笔记写权限**；不做换签授权，也不做「是否想公开」的判断（判断在 N7）。上传预签名 TTL 方案未给值，按 300 秒实现（与私有图换签一致）→ **TODO-API-11** 实测是否够大文件直传。
 
-### 5.6 管理后台（admin-api）
+### 5.6 管理后台
 
 | # | 方法 | 路径 | 入参 | 出参 | 错误码 | ETag | 分页 |
 |-|-|-|-|-|-|-|-|
@@ -374,7 +382,7 @@ sequenceDiagram
 **TODO-API-03（P1）**：8.1 要求管理员开关「默认可见性 / 强制私有」，PRD P-13 有页面，但 12.1 无团队配置路由。M6/M7 为【派生】。
 **TODO-API-07 已关闭**：PRD v0.3.3 明确「后台不删用户」，只提供禁用；12.1 的 `DELETE /admin/users` 不挂载（路由不存在比 501 更安全，避免前端误以为可扩展）。
 
-### 5.7 导出（export-api）
+### 5.7 导出
 
 | # | 方法 | 路径 | 入参 | 出参 | 错误码 | ETag | 分页 |
 |-|-|-|-|-|-|-|-|
@@ -385,7 +393,7 @@ sequenceDiagram
 
 口径说明：页面清单 P-22 写「链接 10 分钟过期可重新生成」是 ZIP/异步的统一说法；单篇同步下载按方案 6.6 为 **5 分钟**，前端文案按实际 `expires_at` 展示，不写死「10 分钟」。
 
-### 5.8 异步任务轮询（【派生】，建议归 notes-api 或独立）
+### 5.8 异步任务轮询（J1，独立函数）
 
 | # | 方法 | 路径 | 入参 | 出参 | 错误码 | ETag | 分页 |
 |-|-|-|-|-|-|-|-|
@@ -817,7 +825,7 @@ flowchart TD
 sequenceDiagram
   autonumber
   participant U as 编辑器
-  participant A as asset-api
+  participant A as 图床函数
   participant S as S3
   participant C as CloudFront
   U->>A: POST /assets/presign {note_id, filename, content_type, size}
@@ -847,7 +855,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant U as 浏览器
-  participant A as asset-api
+  participant A as 图床函数
   participant S as S3
   U->>A: GET /assets/{asset_id}/url?note_id=...
   A->>A: 1) 权限：effective_level(user,note) ≥ read
@@ -922,7 +930,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant U as 前端
-  participant N as notes-api
+  participant N as 笔记函数
   participant S as S3
   participant J as jobs/{id}.json
   U->>N: POST /dirs/move {source_path,target_path}
@@ -951,7 +959,7 @@ sequenceDiagram
 
 ### 9.3.1 回收站彻底删除（purge）
 
-**提交入口**：`POST /trash/purge`（N6，组 2 notes-api）→ 202 `{job_id, accepted, rejected}`。四种 `scope` 全部异步，**不做同步删除**（对象数不可预估，见下）。
+**提交入口**：`POST /trash/purge`（N6）→ 202 `{job_id, accepted, rejected}`。四种 `scope` 全部异步，**不做同步删除**（对象数不可预估，见下）。
 
 **任务体**：`{type: purge_note|purge_notes|purge_dir|purge_all, scope, root, cursor, purged[], rejected[], failed[], freed_bytes}`。`root` 取 `trash/{category_path}`（目录级）或 `trash/`（清空），用于 409 `JOB_RUNNING` 判定。
 
@@ -1108,10 +1116,10 @@ ZIP 以所选目录为根，空目录保留 `dir/`；文件名 `slug.md`，同�
 
 | 契约 | 值 |
 |-|-|
-| 函数名 | 6 个固定名 |
+| 函数名 | 37 个接口函数 + 1 个维护函数；命名 `cloudjian-<域>-<动作>-api`；清单见契约 §2.6 |
 | 别名 | `live`，集成指向别名 ARN |
 | 执行角色 | `cloudjian-lambda-role`（信任 lambda.amazonaws.com） |
-| 调用授权 | `add-permission` 的 `SourceArn` 到 `arn:aws:execute-api:ap-northeast-1:<acct>:<api-id>/*` |
+| 调用授权 | 每个函数一条 `add-permission`，`SourceArn` 到 `arn:aws:execute-api:ap-northeast-1:<acct>:<api-id>/*` |
 | 运行时 | `python3.14`；Layer 同镜像 |
 | 环境变量 | 4 个 `CJ_*` |
 
@@ -1143,7 +1151,7 @@ S3 生命周期 `prefix` 是字面匹配、不支持 `*`：`users/*/trash/` 会�
 
 ### 10.7 可观测性与告警
 
-- 日志组 `cloudjian-<函数>-api`，保留 30 天；审计事件为同组内单行 JSON。
+- 每个函数一个同名日志组（`cloudjian-<域>-<动作>-api`），保留 30 天；审计事件为同组内单行 JSON。
 - 告警：Lambda 错误率、API 5xx、CloudFront 5xx、412 冲突率异常、发布失败、Budgets。
 - `JOB_RUNNING` 与 `SHARE_REVOKED` 打独立计数指标（任务卡死/权限抖动），但**不计入 5xx 错误率**（属正常业务分支）。
 - S3 Server Access Logging 开启（本身免费，付日志存储），保留 30 天；CloudTrail 只开管理事件，数据事件排障时临时开。
@@ -1291,7 +1299,7 @@ Condition `AWS:SourceArn` = 本分发 ARN（从 `/cloudjian/cdn-arn` 注入，�
 | TODO-API-11 | **开放** | P3 | 上传预签名 TTL 未定 | 8.2 | 暂 300s，实测大文件直传 |
 | TODO-API-12 | **开放** | P2 | 目录级恢复 job 无提交路由 | 6.5 / P-10 | 页面只说「复用 jobs 机制」；建议 `POST /dirs/restore`，与 S6 同 PR 定稿 |
 | TODO-API-13 | **开放** | P1 | 彻底删除路由键归组与命名 | 6.5 / P-10、P-25 | 本文 N6 给 `POST /trash/purge`【派生】；须随首个接口 PR 与 `POST /dirs/restore` 一并定稿，避免两个 `trash/` 前缀路由抢注册 |
-| TODO-API-14 | **开放** | P1 | 公开笔记与可见性路由未进 12.1 | 8.1 / P-09、P-26 | 本文 N7 `POST /notes/{note_id}/visibility`、N8 `GET /public/notes/{public_token}`【派生】；N8 **必须挂无鉴权路由**（单独 authorizer=None），与其余 notes-api 路由分注册；公开路径前缀 `/public/` 需在 CloudFront 与 11.1 白名单口径同步确认 |
+| TODO-API-14 | **开放** | P1 | 公开笔记与可见性路由未进 12.1 | 8.1 / P-09、P-26 | 本文 N7 `POST /notes/{note_id}/visibility`、N8 `GET /public/notes/{public_token}`【派生】；N8 **必须挂无鉴权路由**（单独 authorizer=None），与其余笔记路由分注册；公开路径前缀 `/public/` 需在 CloudFront 与 11.1 白名单口径同步确认 |
 | TODO-API-15 | **开放** | P2 | 公开读限流阈值未定 | 8.1 / N8 | `PUBLIC_RATE_LIMITED`(429) 的维度（IP / token / IP+token）与阈值需实测后回填，本文只定错误码契约 |
 | TODO-ERR-02 | **开放** | P2 | `QUOTA_*` 无阈值与维度 | PRD P-12 / P-23 | 明确是「用户数 100 上限」还是存储配额；无定义则删码与文案 |
 | TODO-ERR-03 | **开放（按 T-A 执行）** | P1 | 错误码全表未产出 | 9.4 / T-A | 随首个业务接口 PR 一次性冻结；之后只增不改，缺 HTTP/params 即 CI 失败 |
@@ -1359,7 +1367,7 @@ infra 基座（桶/生命周期/标签 → OAC+CF+Function → Cognito → API G
 
 | 模块 | 内容 | 依赖 | 门禁 |
 |-|-|-|-|
-| B-01 骨架 | 6 函数、`live` 别名、环境变量、Layer 引用 | infra IAM/SSM | 冒烟读 `index.parquet` 200 |
+| B-01 骨架 | 37+1 函数、`live` 别名、环境变量、Layer 引用 | infra IAM/SSM | 冒烟读 `index.parquet` 200 |
 | B-02 中间件 | 方案 A claims、8 项校验、401/403 | B-01 | 5 条单测（ID Token/禁用/改密/缺失 authorizer/新 Token） |
 | B-03 错误与 i18n 码表 | `error_codes.py` 全表、`{code,params}`、三语 key 生成 | B-01 | 双向校验；未知码回退 |
 | B-04 存储适配 | `parquet_store`（全量读写+条件写）、`retention`（put/copy） | B-01 | grep 门禁；标签单测 |

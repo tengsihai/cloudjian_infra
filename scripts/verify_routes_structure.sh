@@ -77,6 +77,41 @@ grep -q 'audience = \[var.cognito_client_id\]' "$TF" \
   && ok "Audience=client_id" || err "Audience 不是 client_id"
 grep -q 'cognito-idp' "$TF" && ok "Issuer 指向用户池" || err "Issuer 缺失"
 
+# 9) 一路由一函数（契约 §2.6）：37 条路由、37 个不同函数、每函数恰接 1 条
+python - "$TF" <<'PY' || FAIL=1
+import re, sys, pathlib
+tf = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+fail = 0
+def err(m):
+    global fail
+    print("FAIL:", m, file=sys.stderr)
+    fail = 1
+def ok(m):
+    print("  ok:", m)
+
+fn_block = tf.split("function_names = [", 1)[1].split("\n  ]", 1)[0]
+names = re.findall(r'"(cloudjian-[a-z0-9-]+-api)"', fn_block)
+route_fns = re.findall(r'fn = "(cloudjian-[a-z0-9-]+-api)"', tf)
+if len(route_fns) != 37:
+    err(f"路由数 {len(route_fns)} != 37")
+else:
+    ok("路由数 = 37")
+if len(names) != 37 or len(set(names)) != 37:
+    err(f"函数清单 {len(names)} 个（去重 {len(set(names))}）!= 37")
+else:
+    ok("函数清单 = 37（无重复）")
+if len(route_fns) != len(set(route_fns)):
+    dup = {n for n in route_fns if route_fns.count(n) > 1}
+    err(f"有函数承接多条路由：{sorted(dup)}")
+else:
+    ok("每个函数只承接 1 条路由")
+if set(route_fns) != set(names):
+    err(f"路由引用与函数清单不一致：差集 {sorted(set(route_fns) ^ set(names))}")
+else:
+    ok("路由引用与函数清单一致")
+sys.exit(fail)
+PY
+
 if [[ "$FAIL" -ne 0 ]]; then
   echo "verify_routes_structure: FAILED" >&2
   exit 1

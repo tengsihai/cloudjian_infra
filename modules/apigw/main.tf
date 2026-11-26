@@ -3,68 +3,108 @@
 #       maintenance 不暴露。路由键以共同接口契约 v0.1 §2 为准（§6 冻结确认前的基线）。
 
 locals {
-  # 固定命名推导集成 URI（方案 12.3：不 data引用函数，先建集成）
   account_id = data.aws_caller_identity.current.account_id
   region     = var.region
 
-  fn_arn = {
-    notes  = "arn:aws:lambda:${local.region}:${local.account_id}:function:cloudjian-notes-api:live"
-    share  = "arn:aws:lambda:${local.region}:${local.account_id}:function:cloudjian-share-api:live"
-    asset  = "arn:aws:lambda:${local.region}:${local.account_id}:function:cloudjian-asset-api:live"
-    admin  = "arn:aws:lambda:${local.region}:${local.account_id}:function:cloudjian-admin-api:live"
-    export = "arn:aws:lambda:${local.region}:${local.account_id}:function:cloudjian-export-api:live"
-    # maintenance 故意不在表内：不建集成、不暴露
+  # 固定命名推导集成 URI（方案 12.3：不 data 引用函数，先建集成）
+  # 一路由一函数（契约 §2.6）：37 个业务函数，命名 cloudjian-<域>-<动作>-api
+  function_names = [
+    "cloudjian-notes-list-api",
+    "cloudjian-notes-create-api",
+    "cloudjian-notes-get-api",
+    "cloudjian-notes-update-api",
+    "cloudjian-notes-delete-api",
+    "cloudjian-trash-purge-api",
+    "cloudjian-versions-list-api",
+    "cloudjian-versions-restore-api",
+    "cloudjian-versions-get-api",
+    "cloudjian-search-query-api",
+    "cloudjian-dirs-list-api",
+    "cloudjian-dirs-move-api",
+    "cloudjian-dirs-create-api",
+    "cloudjian-dirs-update-api",
+    "cloudjian-dirs-delete-api",
+    "cloudjian-dirs-restore-api",
+    "cloudjian-jobs-get-api",
+    "cloudjian-notes-visibility-api",
+    "cloudjian-notes-public-get-api",
+    "cloudjian-shares-list-api",
+    "cloudjian-shares-create-api",
+    "cloudjian-shares-revoke-api",
+    "cloudjian-assets-presign-api",
+    "cloudjian-assets-register-api",
+    "cloudjian-assets-url-get-api",
+    "cloudjian-assets-urls-api",
+    "cloudjian-assets-list-api",
+    "cloudjian-admin-users-list-api",
+    "cloudjian-admin-users-create-api",
+    "cloudjian-admin-users-update-api",
+    "cloudjian-admin-users-reset-api",
+    "cloudjian-admin-team-config-get-api",
+    "cloudjian-admin-team-config-put-api",
+    "cloudjian-profile-get-api",
+    "cloudjian-profile-put-api",
+    "cloudjian-exports-create-api",
+    "cloudjian-exports-get-api",
+  ]
+
+  fn_arn = { for n in local.function_names :
+    n => "arn:aws:lambda:${local.region}:${local.account_id}:function:${n}:live"
   }
 
-  # 8 组业务 + 派生路由（契约 §2）；target 为 fn_arn 键
-  # auth=JWT → 挂授权器；auth=NONE → 仅 N8
+  # 每条路由恰好接一个函数；auth=JWT → 挂授权器，auth=NONE → 仅 N8
+  # maintenance 故意不在表内：不建集成、不暴露
   routes = [
-    # 组1 notes 列表/新建
-    { key = "GET /notes", fn = "notes", auth = "JWT" },
-    { key = "POST /notes", fn = "notes", auth = "JWT" },
-    # 组2 单篇 + purge
-    { key = "GET /notes/{note_id}", fn = "notes", auth = "JWT" },
-    { key = "PUT /notes/{note_id}", fn = "notes", auth = "JWT" },
-    { key = "DELETE /notes/{note_id}", fn = "notes", auth = "JWT" },
-    { key = "POST /trash/purge", fn = "notes", auth = "JWT" },
-    # 组3 版本
-    { key = "GET /notes/{note_id}/versions", fn = "notes", auth = "JWT" },
-    { key = "POST /notes/{note_id}/versions/{ts}/restore", fn = "notes", auth = "JWT" },
-    { key = "GET /notes/{note_id}/versions/{ts}", fn = "notes", auth = "JWT" },
-    # 组4 搜索/目录/任务
-    { key = "GET /search", fn = "notes", auth = "JWT" },
-    { key = "GET /dirs", fn = "notes", auth = "JWT" },
-    { key = "POST /dirs/move", fn = "notes", auth = "JWT" },
-    { key = "POST /dirs", fn = "notes", auth = "JWT" },
-    { key = "PATCH /dirs", fn = "notes", auth = "JWT" },
-    { key = "DELETE /dirs", fn = "notes", auth = "JWT" },
-    { key = "POST /dirs/restore", fn = "notes", auth = "JWT" },
-    { key = "GET /jobs/{job_id}", fn = "notes", auth = "JWT" },
-    # 组2 续：N7 可见性 + N8 公开读（NONE）
-    { key = "POST /notes/{note_id}/visibility", fn = "notes", auth = "JWT" },
-    { key = "GET /public/notes/{public_token}", fn = "notes", auth = "NONE" },
-    # 组5 共享（H3 路径参数形态，TODO-API-06）
-    { key = "GET /shares", fn = "share", auth = "JWT" },
-    { key = "POST /shares", fn = "share", auth = "JWT" },
-    { key = "DELETE /shares/{share_id}", fn = "share", auth = "JWT" },
-    # 组6 图床
-    { key = "POST /assets/presign", fn = "asset", auth = "JWT" },
-    { key = "POST /assets/register", fn = "asset", auth = "JWT" },
-    { key = "GET /assets/{asset_id}/url", fn = "asset", auth = "JWT" },
-    { key = "POST /assets/urls", fn = "asset", auth = "JWT" },
-    { key = "GET /assets", fn = "asset", auth = "JWT" },
-    # 组7 管理（M4 不挂载）+ profile
-    { key = "GET /admin/users", fn = "admin", auth = "JWT" },
-    { key = "POST /admin/users", fn = "admin", auth = "JWT" },
-    { key = "PATCH /admin/users/{sub}", fn = "admin", auth = "JWT" },
-    { key = "POST /admin/users/{sub}/reset", fn = "admin", auth = "JWT" },
-    { key = "GET /admin/team-config", fn = "admin", auth = "JWT" },
-    { key = "PUT /admin/team-config", fn = "admin", auth = "JWT" },
-    { key = "GET /profile", fn = "admin", auth = "JWT" },
-    { key = "PUT /profile", fn = "admin", auth = "JWT" },
-    # 组8 导出
-    { key = "POST /exports", fn = "export", auth = "JWT" },
-    { key = "GET /exports/{job_id}", fn = "export", auth = "JWT" },
+    # 笔记
+    { key = "GET /notes", fn = "cloudjian-notes-list-api", auth = "JWT" },
+    { key = "POST /notes", fn = "cloudjian-notes-create-api", auth = "JWT" },
+    { key = "GET /notes/{note_id}", fn = "cloudjian-notes-get-api", auth = "JWT" },
+    { key = "PUT /notes/{note_id}", fn = "cloudjian-notes-update-api", auth = "JWT" },
+    { key = "DELETE /notes/{note_id}", fn = "cloudjian-notes-delete-api", auth = "JWT" },
+    # 回收站
+    { key = "POST /trash/purge", fn = "cloudjian-trash-purge-api", auth = "JWT" },
+    # 版本
+    { key = "GET /notes/{note_id}/versions", fn = "cloudjian-versions-list-api", auth = "JWT" },
+    { key = "POST /notes/{note_id}/versions/{ts}/restore", fn = "cloudjian-versions-restore-api", auth = "JWT" },
+    { key = "GET /notes/{note_id}/versions/{ts}", fn = "cloudjian-versions-get-api", auth = "JWT" },
+    # 搜索
+    { key = "GET /search", fn = "cloudjian-search-query-api", auth = "JWT" },
+    # 目录
+    { key = "GET /dirs", fn = "cloudjian-dirs-list-api", auth = "JWT" },
+    { key = "POST /dirs/move", fn = "cloudjian-dirs-move-api", auth = "JWT" },
+    { key = "POST /dirs", fn = "cloudjian-dirs-create-api", auth = "JWT" },
+    { key = "PATCH /dirs", fn = "cloudjian-dirs-update-api", auth = "JWT" },
+    { key = "DELETE /dirs", fn = "cloudjian-dirs-delete-api", auth = "JWT" },
+    { key = "POST /dirs/restore", fn = "cloudjian-dirs-restore-api", auth = "JWT" },
+    # 任务
+    { key = "GET /jobs/{job_id}", fn = "cloudjian-jobs-get-api", auth = "JWT" },
+    # 笔记
+    { key = "POST /notes/{note_id}/visibility", fn = "cloudjian-notes-visibility-api", auth = "JWT" },
+    # 笔记·公开读
+    { key = "GET /public/notes/{public_token}", fn = "cloudjian-notes-public-get-api", auth = "NONE" },
+    # 共享
+    { key = "GET /shares", fn = "cloudjian-shares-list-api", auth = "JWT" },
+    { key = "POST /shares", fn = "cloudjian-shares-create-api", auth = "JWT" },
+    { key = "DELETE /shares/{share_id}", fn = "cloudjian-shares-revoke-api", auth = "JWT" },
+    # 图床
+    { key = "POST /assets/presign", fn = "cloudjian-assets-presign-api", auth = "JWT" },
+    { key = "POST /assets/register", fn = "cloudjian-assets-register-api", auth = "JWT" },
+    { key = "GET /assets/{asset_id}/url", fn = "cloudjian-assets-url-get-api", auth = "JWT" },
+    { key = "POST /assets/urls", fn = "cloudjian-assets-urls-api", auth = "JWT" },
+    { key = "GET /assets", fn = "cloudjian-assets-list-api", auth = "JWT" },
+    # 管理
+    { key = "GET /admin/users", fn = "cloudjian-admin-users-list-api", auth = "JWT" },
+    { key = "POST /admin/users", fn = "cloudjian-admin-users-create-api", auth = "JWT" },
+    { key = "PATCH /admin/users/{sub}", fn = "cloudjian-admin-users-update-api", auth = "JWT" },
+    { key = "POST /admin/users/{sub}/reset", fn = "cloudjian-admin-users-reset-api", auth = "JWT" },
+    { key = "GET /admin/team-config", fn = "cloudjian-admin-team-config-get-api", auth = "JWT" },
+    { key = "PUT /admin/team-config", fn = "cloudjian-admin-team-config-put-api", auth = "JWT" },
+    # 个人设置
+    { key = "GET /profile", fn = "cloudjian-profile-get-api", auth = "JWT" },
+    { key = "PUT /profile", fn = "cloudjian-profile-put-api", auth = "JWT" },
+    # 导出
+    { key = "POST /exports", fn = "cloudjian-exports-create-api", auth = "JWT" },
+    { key = "GET /exports/{job_id}", fn = "cloudjian-exports-get-api", auth = "JWT" },
   ]
 
   jwt_routes  = [for r in local.routes : r if r.auth == "JWT"]

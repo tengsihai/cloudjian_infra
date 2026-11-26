@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# P-08 INF-09 结构门禁：6 日志组 30 天、告警面、独立指标、Budgets、成本标签。
+# P-08 INF-09 结构门禁：38 日志组 30 天、告警面、独立指标、Budgets、成本标签。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,17 +12,16 @@ ok()  { echo "  ok: $*"; }
 
 [[ -f "$TF" ]] || { err "缺少 $TF"; exit 1; }
 
-# 8.5 六个函数日志组 + 30 天（名字在 variables 默认表，日志组名由 main 拼接）
+# 8.5 38 个函数日志组 + 30 天（名字在 variables 默认表，日志组名 = 函数名）
 VARS="$ROOT/modules/observability/variables.tf"
-for fn in notes share asset admin export maintenance; do
-  if grep -q "cloudjian-${fn}-api" "$VARS" "$TF"; then
-    ok "函数表含 cloudjian-${fn}-api"
-  else
-    err "缺函数 cloudjian-${fn}-api"
-  fi
-done
-if grep -q 'fn => "\${fn}-api"' "$TF" || grep -q '"\${fn}-api"' "$TF"; then
-  ok "日志组名 = <fn>-api 拼接"
+fn_count=$(grep -cE '^    "cloudjian-[a-z0-9-]+-api",$' "$VARS" || true)
+if [[ "$fn_count" -eq 38 ]]; then
+  ok "函数表 = 38 个（37 接口 + maintenance）"
+else
+  err "函数表数量 $fn_count != 38"
+fi
+if grep -q 'log_groups = { for fn in var.lambda_function_names : fn => fn }' "$TF"; then
+  ok "日志组名 = 函数名"
 else
   err "日志组命名规则缺失"
 fi
