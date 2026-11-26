@@ -1,0 +1,14 @@
+# checkov 配置 — 云笺取舍（均有方案/架构出处，不接受无理由放宽）
+framework:
+  - terraform
+
+# 交付门禁：无高危失败；下列项为已拍板取舍，逐条写明出处
+skip-check:
+  # 单区域东京部署，无跨区容灾需求（方案 12 部署区域；成本模型未含 CRR）
+  - CKV_AWS_144
+  # 加密用 SSE-S3（AES256），不上 KMS：内部工具、免 KMS 管理面与费用（方案 12.8 成本口径）
+  - CKV_AWS_145
+  # S3 事件通知不在架构内：异步全部走 EventBridge Scheduler 与 Lambda 内部 job（架构 9 章）
+  - CKV2_AWS_62
+  # 访问日志桶不开 Versioning：日志为追加型，30 天过期即可（方案 12.7）；数据桶与状态桶均已开
+  - CKV_AWS_21
