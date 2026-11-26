@@ -1,6 +1,7 @@
 # cloudjian-infra — 云笺基础设施工程（T1）
 
 > 依据：技术架构 v1.2、方案 v1.13.7 §12、T1 交付说明 v0.1、任务拆解 v0.1
+> **全部门文档入口（新人先读）**：[docs/README.md](docs/README.md)
 > **只创建资源与门禁，不创建 Lambda/Layer，不部署 VPC，不 `s3 sync` 前端产物。**
 
 ## 仓库结构
