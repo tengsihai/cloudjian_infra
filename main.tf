@@ -1,12 +1,12 @@
-# 云笺基础设施 — 单环境根配置（dev 即线上，方案 12.4）
-# workspace 固定为 tokyo；资源无 <env> 后缀（方案 12.11 单环境）。
+# 云笺基础设施 — 单环境根配置（release 即线上）
+# workspace 固定为 tokyo；资源无 <env> 后缀。
 
 locals {
   workspace = terraform.workspace
   name      = var.project # cloudjian
 }
 
-# workspace 门禁：只允许 tokyo，防止误在 default 上 apply
+# workspace 校验：只允许 tokyo，防止误在 default 上 apply
 check "workspace_is_tokyo" {
   assert {
     condition     = local.workspace == "tokyo"
@@ -14,15 +14,15 @@ check "workspace_is_tokyo" {
   }
 }
 
-# —— 模块装配区（按 INF 包逐个接入，P-01 起填充）——
-# module "storage" { ... }      # INF-01/02
-# module "cdn" { ... }          # INF-03
-# module "cognito" { ... }      # INF-04
-# module "apigw" { ... }        # INF-05
-# module "iam" { ... }          # INF-06
-# module "ssm" 已在 ssm.tf 装配（P-07）
-# module "scheduler" 已在 scheduler.tf 装配（P-08）
-# module "observability" 已在 observability.tf 装配（P-08）
+# —— 模块装配区 ——
+# module "storage" { ... }      # 桶、生命周期、策略
+# module "cdn" { ... }          # CloudFront + Function
+# module "cognito" { ... }      # 用户池与 App Client
+# module "apigw" { ... }        # HTTP API
+# module "iam" { ... }          # 角色与策略
+# module "ssm" 在 ssm.tf 装配
+# module "scheduler" 在 scheduler.tf 装配
+# module "observability" 在 observability.tf 装配
 
 module "network" {
   source = "./modules/network"

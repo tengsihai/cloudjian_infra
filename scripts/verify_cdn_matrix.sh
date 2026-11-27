@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# P-03 Function 行为矩阵（架构 11.1 闸3 / 交付说明验收）。
-# 匿名请求断言：放行 200、私有 403、SPA rewrite 200、缺失静态 404。
+# Function 白名单行为矩阵（发布后实测）。
+# 匿名请求校验：放行 200、私有 403、SPA rewrite 200、缺失静态 404。
 #
 # 用法：
 #   CF_DOMAIN=dxxx.cloudfront.net ./scripts/verify_cdn_matrix.sh
@@ -46,10 +46,10 @@ assert_status "/web/index.html" 200 "static index"
 assert_status "/web/missing.js" 404 "missing static 404"
 
 # 公开图：用一个不存在的对象 → 404（源站），但**不能**是 403（证明放行到源站）
-# 真实 200 用例需造数：P-07 联调时补 assets/public 真图
+# 真实 200 用例需造数：联调时补 assets/public 真图
 assert_status "/users/00000000-0000-0000-0000-000000000000/assets/public/nope.png" 404 "public asset reaches origin"
 
-# 私有/敏感路径 → 403 终态（闸 2 + 闸 3）
+# 私有/敏感路径 → 403 终态（白名单 + 匿名穿透验证）
 U="users/00000000-0000-0000-0000-000000000000"
 assert_status "/${U}/notes/secret.md" 403 "private note path"
 assert_status "/${U}/index.parquet" 403 "index.parquet"

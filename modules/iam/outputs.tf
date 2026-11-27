@@ -1,4 +1,4 @@
-# INF-06 输出（供 SSM /cloudjian/lambda-exec-role-arn 等）
+# 输出（供 SSM /cloudjian/lambda-exec-role-arn 等）
 
 output "lambda_role_arn" {
   description = "cloudjian-lambda-role ARN（SSM /cloudjian/lambda-exec-role-arn；backend 挂载读取）"
@@ -6,7 +6,7 @@ output "lambda_role_arn" {
 }
 
 output "scheduler_role_arn" {
-  description = "cloudjian-scheduler-role ARN（P-08 调度目标角色）"
+  description = "cloudjian-scheduler-role ARN（调度目标角色）"
   value       = aws_iam_role.scheduler.arn
 }
 

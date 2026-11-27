@@ -1,4 +1,4 @@
-# 状态后端：S3 状态桶与业务桶物理分离（架构 6.1）。
+# 状态后端：S3 状态桶与业务桶物理分离。
 # 首次使用前先跑 scripts/bootstrap_state.sh 创建状态桶；
 # 之后用 -backend-config 参数或下方注释打开（bucket/region/dynamodb 由 bootstrap 输出）。
 terraform {

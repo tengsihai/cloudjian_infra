@@ -1,4 +1,4 @@
-# INF-09 装配（P-08）— 日志组、告警、Budgets、成本标签
+# 可观测装配 — 告警、Budgets、成本标签
 
 module "observability" {
   source = "./modules/observability"

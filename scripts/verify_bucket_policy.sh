@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# P-02 门禁：桶策略只允许两条 Resource，且带 SourceArn 条件；无 bucket/* 通配。
+# 桶策略校验：桶策略只允许两条 Resource，且带 SourceArn 条件；无 bucket/* 通配。
 # 优先读 Terraform plan JSON / state；也支持拉取线上策略：
 #   ./scripts/verify_bucket_policy.sh              # 从 aws cli 拉线上
 #   ./scripts/verify_bucket_policy.sh plan.json    # 从 plan 拉
@@ -41,7 +41,7 @@ fi
 [[ -n "$POLICY_JSON" && "$POLICY_JSON" != "None" ]] || { err "取不到桶策略"; exit 1; }
 
 echo "$POLICY_JSON" | python -c '
-import json,sys
+import json,sys,re
 policy=json.load(sys.stdin)
 stmts=policy.get("Statement",[])
 if not isinstance(stmts,list): stmts=[stmts]
@@ -63,12 +63,26 @@ for s in allows:
     r=s.get("Resource",[])
     if isinstance(r,str): r=[r]
     resources.extend(r)
-    # 必须有 SourceArn 条件
+    # 必须有 SourceArn 条件，且值必须是具体分发 ARN（不得带通配）
     cond=s.get("Condition",{})
     if "StringEquals" not in cond or "AWS:SourceArn" not in cond["StringEquals"]:
         err("语句缺少 Condition.StringEquals.AWS:SourceArn")
     else:
-        ok("SourceArn 条件存在（且非字面账户拼接——值应为分发 ARN）")
+        src=cond["StringEquals"]["AWS:SourceArn"]
+        srcs=src if isinstance(src,list) else [src]
+        for v in srcs:
+            if "*" in v or "?" in v:
+                err(f"SourceArn 含通配: {v}")
+            elif not re.match(r"^arn:aws:cloudfront::\d{12}:distribution/[A-Za-z0-9]+$", v):
+                err(f"SourceArn 不是分发 ARN: {v}")
+            else:
+                ok(f"SourceArn = 分发 {v.rsplit(chr(47),1)[-1]}")
+    # Action 只能是 s3:GetObject
+    act=s.get("Action")
+    acts=act if isinstance(act,list) else [act]
+    for a in acts:
+        if a not in ("s3:GetObject","s3:GetObject*"):
+            err(f"越权 Action: {a}（只允许 s3:GetObject）")
     # Principal 必须是 cloudfront
     p=s.get("Principal",{})
     if p.get("Service")!="cloudfront.amazonaws.com":
@@ -95,8 +109,6 @@ elif len(resources)!=2:
 
 # 明确拒绝 bucket/* 与 users/* 整段
 blob=json.dumps(policy)
-if "\"arn:aws:s3:::' + '" in blob: pass
-import re
 for bad in [r"arn:aws:s3:::[^/]+/\*$", r"arn:aws:s3:::[^/]+/users/\*$"]:
     if re.search(bad, blob):
         err(f"命中禁止模式 {bad}")

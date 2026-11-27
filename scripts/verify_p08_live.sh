@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# P-08 实测门禁（apply 后）：调度、日志组保留、告警、预算、成本标签。
+# 实测校验（apply 后）：调度、日志组保留、告警、预算、成本标签。
 #
 # 用法：./scripts/verify_p08_live.sh
 set -euo pipefail
@@ -95,7 +95,7 @@ anames = {a["AlarmName"] for a in alarms.get("MetricAlarms", [])}
 for a in (
     "cloudjian-api-5xx",
     "cloudjian-cdn-5xx",
-    "cloudjian-conflict-412",
+    "cloudjian-note-conflict-412",
     "cloudjian-job-running",
     "cloudjian-share-revoked",
     "cloudjian-publish-failed",

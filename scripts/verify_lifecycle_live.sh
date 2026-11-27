@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# P-01 实测门禁（apply 后、需 AWS 凭证）：
-#   造 4 类对象 → get-object-tagging 断言标签 → list-objects-v2 断言规则命中 >0。
+# 实测校验（apply 后、需 AWS 凭证）：
+#   造 4 类对象 → get-object-tagging 校验标签 → list-objects-v2 校验规则命中 >0。
 # 长周期项（8 天非当前 ≤3、31 天清空）不在本脚本内，按任务拆解 G1 记录实测日志。
 #
 # 用法：
@@ -48,7 +48,7 @@ assert_tag() { # $1=key $2=expected
 
 echo "==> lifecycle live probe on s3://$BUCKET (prefix=$PREFIX)"
 
-# —— 4 类造数（架构 10.6 验收口径）——
+# —— 4 类造数（生命周期验收口径）——
 # 1. 标签 30d：模拟 trash 移入（写入侧由 backend 打标；此处直接造带标签对象）
 put_probe "${PREFIX}trash/probe.md" "30d"
 # 2. 标签 30d：versions

@@ -1,4 +1,4 @@
-# INF-06 装配（P-05）
+# IAM 装配（三仓 GHA 角色、Lambda 执行角色、Scheduler 角色）
 
 module "iam" {
   source = "./modules/iam"

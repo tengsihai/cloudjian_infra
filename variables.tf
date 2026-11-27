@@ -1,5 +1,5 @@
 variable "region" {
-  description = "AWS 区域（架构固定东京）"
+  description = "AWS 区域（固定东京）"
   type        = string
   default     = "ap-northeast-1"
 }
@@ -12,7 +12,7 @@ variable "project" {
 
 variable "enable_vpc" {
   description = <<-EOT
-    是否部署 VPC 网络资源。方案 12.6 决策：**不建 VPC**，恒为 false。
+    是否部署 VPC 网络资源。决策：**不建 VPC**，恒为 false。
     置 true 也不会部署任何网络资源——network 模块只保留空模块与接线说明，
     演进时需按 modules/network/README.md 补齐子网/NAT/S3 Endpoint 后再打开。
   EOT
@@ -21,7 +21,7 @@ variable "enable_vpc" {
 }
 
 variable "budget_monthly_usd" {
-  description = "AWS Budgets 月度阈值（USD），方案 12.7 固定 $5"
+  description = "AWS Budgets 月度阈值（USD），固定 $5"
   type        = number
   default     = 5
 }

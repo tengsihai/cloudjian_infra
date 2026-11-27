@@ -3,7 +3,7 @@ output "schedule_group_name" {
 }
 
 output "schedule_names" {
-  description = "三条调度名（结构门禁比对）"
+  description = "三条调度名（结构校验比对）"
   value       = sort([for k, _ in local.schedules : k])
 }
 

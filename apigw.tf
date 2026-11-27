@@ -1,4 +1,4 @@
-# INF-05 装配（P-06）
+# 网关装配（API、Stage、JWT 授权器、CORS、访问日志组）
 
 module "apigw" {
   source = "./modules/apigw"

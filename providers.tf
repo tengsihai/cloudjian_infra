@@ -6,7 +6,7 @@ provider "aws" {
       Project     = "cloudjian"
       ManagedBy   = "terraform"
       Repository  = "cloudjian-infra"
-      Environment = "dev"
+      Environment = "release"
     }
   }
 }

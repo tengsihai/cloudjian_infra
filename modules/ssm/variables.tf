@@ -56,6 +56,6 @@ variable "api_id" {
 }
 
 variable "jwt_authorizer_id" {
-  description = "→ /cloudjian/jwt-authorizer-id（get-routes 门禁期望值）"
+  description = "→ /cloudjian/jwt-authorizer-id（路由校验期望值）"
   type        = string
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# P-01 结构门禁：生命周期必须是「标签过滤」，禁止 prefix 字面匹配。
+# 结构校验：生命周期必须是「标签过滤」，禁止 prefix 字面匹配。
 # 造数命中（get-object-tagging / list-objects-v2）在 apply 后由
 # scripts/verify_lifecycle_live.sh 执行（需要 AWS 凭证）。
 set -euo pipefail

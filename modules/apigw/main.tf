@@ -1,13 +1,13 @@
-# INF-05 HTTP API 壳（API / Stage / JWT 授权器 / CORS）
+# HTTP API（API / Stage / JWT 授权器 / CORS）
 # 路由与集成归 backend 部署时注册（契约 §2.6）；infra 不建 route/integration、不枚举函数名。
-# 路由红线（无 $default、N8 单独 NONE、M4 不挂载、maintenance 不暴露）由 backend CI 校验。
+# 路由硬性约束（无 $default、N8 单独 NONE、maintenance 不暴露）由 backend CI 校验。
 
 # ————————————————————————————— API + Stage —————————————————————————————
 
 resource "aws_apigatewayv2_api" "http" {
   name          = "${var.project}-http-api"
   protocol_type = "HTTP"
-  description   = "CloudJian business API; no $default route (红线1)"
+  description   = "CloudJian business API; no $default route"
 
   cors_configuration {
     allow_origins     = ["https://${var.cdn_domain}"]
@@ -33,8 +33,7 @@ resource "aws_apigatewayv2_stage" "dev" {
     format = jsonencode({
       requestId        = "$context.requestId"
       ip               = "$context.identity.sourceIp"
-      requestTime      = "$context.requestTime"
-      httpMethod       = "$context.httpMethod"
+      method           = "$context.httpMethod"
       routeKey         = "$context.routeKey"
       status           = "$context.status"
       responseLength   = "$context.responseLength"
@@ -51,7 +50,7 @@ resource "aws_apigatewayv2_stage" "dev" {
 
 # ————————————————————————————— JWT 授权器 —————————————————————————————
 # Audience = App Client ID（AccessToken 无 aud，回退校验 client_id）
-# TODO-AUTH-01：暂不声明 authorizationScopes，实测 SRP scope 后另 PR
+# authorizationScopes 暂不声明：SRP 登录实际携带的 scope 待实测后补
 
 resource "aws_apigatewayv2_authorizer" "jwt" {
   api_id           = aws_apigatewayv2_api.http.id
@@ -66,10 +65,10 @@ resource "aws_apigatewayv2_authorizer" "jwt" {
 }
 
 # ————————————————————————————— 路由与集成（归 backend） —————————————————————————————
-# 架构 10.4：backend 部署脚本按契约 §2 注册 integration + route + add-permission；
+# backend 部署脚本按契约 §2 注册 integration + route + add-permission；
 # infra 只建 API / Stage / JWT 授权器 / CORS 壳，不枚举函数、不建路由。
-# 因此新增接口不需要改 infra；网关也不存在 $default 路由（红线1）。
+# 因此新增接口不需要改 infra；网关也不存在 $default 路由（硬性约束 1）。
 
 # ————————————————————————————— 调用授权（函数侧由 backend add-permission） —————————————————————————————
-# 架构 10.4：SourceArn 到 arn:aws:execute-api:...:<api-id>/* —— 归 backend。
+# SourceArn 到 arn:aws:execute-api:...:<api-id>/* —— 归 backend。
 # 这里只保证 api-id 可被 SSM 消费。

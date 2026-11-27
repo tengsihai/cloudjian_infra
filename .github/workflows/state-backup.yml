@@ -1,4 +1,4 @@
-# INF-10 · 状态桶月度备份（任务拆解 9.8）
+# 状态桶月度备份
 # 每月一次全量 sync 到工作区并作为 artifact 留存；跨区域副本见 docs 运维计划。
 name: state-backup
 
@@ -22,7 +22,7 @@ env:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    environment: dev
+    environment: release
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

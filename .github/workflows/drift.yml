@@ -1,4 +1,4 @@
-# INF-10 · 每周漂移检查（方案 12.4 步骤5 / 任务拆解 9.4）
+# 每周漂移检查
 # 非每日（省 CI 分钟）；有差异开 Issue。
 name: drift
 
@@ -24,7 +24,7 @@ env:
 jobs:
   plan:
     runs-on: ubuntu-latest
-    environment: dev
+    environment: release
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

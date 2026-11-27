@@ -1,4 +1,4 @@
-# INF-09 可观测与预算（架构 10.7 / 方案 12.7）
+# 可观测与预算
 # - 平台告警：API 5xx、CF 5xx、412 冲突、发布失败、Budgets、成本标签
 # - 函数日志组与保留期归 backend（部署时对 /aws/lambda/cloudjian-* 设 30 天）
 # - JOB_RUNNING / SHARE_REVOKED 由 backend 以 EMF 指标打点，infra 只建告警，不枚举函数
@@ -99,7 +99,7 @@ resource "aws_cloudwatch_log_metric_filter" "conflict_412" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "conflict_412" {
-  alarm_name          = "${var.project}-conflict-412"
+  alarm_name          = "${var.project}-note-conflict-412"
   alarm_description   = "If-Match 冲突 412 异常升高（乐观锁打爆）；独立于 5xx"
   namespace           = var.project
   metric_name         = "NoteConflict412"
@@ -172,8 +172,8 @@ resource "aws_cloudwatch_metric_alarm" "share_revoked" {
 
 resource "aws_cloudwatch_metric_alarm" "publish_failed" {
   alarm_name          = "${var.project}-publish-failed"
-  alarm_description   = "backend 发布失败打点（PublishFailed>0）；依赖 T3 CI 打点"
-  namespace           = var.project
+  alarm_description   = "backend 发布失败打点（PublishFailed>0）；依赖 backend CI 打点"
+  namespace           = "CloudJian/PublishFailed"
   metric_name         = "PublishFailed"
   statistic           = "Sum"
   period              = 300
@@ -217,12 +217,12 @@ resource "aws_budgets_budget" "monthly" {
     ManagedBy   = "terraform"
     Project     = var.project
     Component   = "observability"
-    Environment = "dev"
+    Environment = "release"
   }
 }
 
 # ————————————————————————————— Cost Allocation Tags —————————————————————————————
-# 方案 12.7：不激活则账单无法按项目归集
+# 不激活则账单无法按项目归集
 
 resource "aws_ce_cost_allocation_tag" "project" {
   tag_key = "Project"

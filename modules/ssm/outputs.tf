@@ -1,5 +1,5 @@
 output "parameter_names" {
-  description = "infra 管理的参数全名（结构门禁比对用）"
+  description = "infra 管理的参数全名（结构校验比对用）"
   value = concat(
     sort([for k, _ in local.bus : "/${var.project}/${k}"]),
     ["/${var.project}/release/archive"],

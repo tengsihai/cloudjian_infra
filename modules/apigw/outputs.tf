@@ -5,12 +5,12 @@ output "api_id" {
 
 output "api_endpoint" {
   description = "SSM /cloudjian/api-url（含 stage dev）"
-  # api_endpoint 本身不带 stage；业务基址必须含 /dev（架构 5.0）
+  # api_endpoint 本身不带 stage；业务基址必须含 /dev
   value = "${aws_apigatewayv2_api.http.api_endpoint}/${aws_apigatewayv2_stage.dev.name}"
 }
 
 output "authorizer_id" {
-  description = "SSM /cloudjian/jwt-authorizer-id；get-routes 门禁期望值"
+  description = "SSM /cloudjian/jwt-authorizer-id；路由校验期望值"
   value       = aws_apigatewayv2_authorizer.jwt.id
 }
 

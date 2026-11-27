@@ -1,6 +1,6 @@
-# INF-04 Cognito（架构 4 章 / 方案 12.1）
+# Cognito 用户池与 App Client
 # - App Client：Access/Id 各 20h、无 RefreshToken、WriteAttributes 空、Revocation
-# - 密码策略：Cognito 只能管下限与字符类别；20 位上限由前端 + Lambda（TODO-PWD-01）
+# - 密码策略：Cognito 只能管下限与字符类别；20 位上限由前端 + Lambda 校验（业务侧约束）
 # - Groups：admin / user（role 真源在注册表，Group 只影响前端菜单）
 
 resource "aws_cognito_user_pool" "main" {
@@ -21,7 +21,7 @@ resource "aws_cognito_user_pool" "main" {
   }
 
   # 用户名作为登录标识：不设 username_attributes（仅接受 email/phone），
-  # 用自定义 username schema（admin 开号 username，架构 5.6 M2）
+  # 用自定义 username schema（admin 开号时指定 username）
   username_configuration {
     case_sensitive = true
   }
@@ -37,8 +37,8 @@ resource "aws_cognito_user_pool" "main" {
     }
   }
 
-  # 改密后 auth_time >= password_changed_at 由 Lambda 比对（架构 4.4）
-  # 这里不开 advanced security（额外费用，方案 12.8 预算内无此项目）
+  # 改密后 auth_time >= password_changed_at 由 Lambda 比对
+  # 这里不开 advanced security（额外费用，成本预算内无此项目）
 }
 
 resource "aws_cognito_user_pool_client" "app" {
@@ -50,7 +50,7 @@ resource "aws_cognito_user_pool_client" "app" {
   enable_token_revocation              = true
   allowed_oauth_flows_user_pool_client = false
 
-  # 只开 SRP（架构 4.1/4.2）：不给 RefreshToken 流，到期清 Token 跳登录
+  # 只开 SRP：不给 RefreshToken 流，到期清 Token 跳登录
   explicit_auth_flows = [
     "ALLOW_USER_SRP_AUTH",
   ]
@@ -66,7 +66,7 @@ resource "aws_cognito_user_pool_client" "app" {
     refresh_token = "hours"
   }
 
-  # WriteAttributes 为空集：不允许客户端改写属性（架构 4.2）
+  # WriteAttributes 为空集：不允许客户端改写属性
   write_attributes = []
 
   # 回调：自建登录页，无 Hosted UI 回调

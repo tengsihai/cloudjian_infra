@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# P-07 结构门禁（apply 前可跑）：参数全表 + 单一写方 + 消费者引用。
+# 结构校验（apply 前可跑）：参数全表 + 单一写方 + 消费者引用。
 # apply 后的 get-parameters-by-path 实测见 verify_ssm_live.sh。
 set -euo pipefail
 
@@ -15,7 +15,7 @@ ok()  { echo "  ok: $*"; }
 
 [[ -f "$SSM" ]] || { err "缺少 $SSM"; exit 1; }
 
-# —— 7.1 参数全表（架构 10.2，infra 写入 11 条 + release/archive）——
+# —— 参数全表（infra 写入 11 条 + release/archive）——
 REQUIRED_KEYS=(
   bucket cdn-domain cdn-arn api-url user-pool-id client-id
   region lambda-exec-role-arn lambda-alias api-id jwt-authorizer-id
@@ -86,7 +86,7 @@ fi
 
 # —— 7.5 jwt-authorizer-id 自动化消费者 ——
 if [[ -f "$ROUTES_LIVE" ]] && grep -q '/cloudjian/jwt-authorizer-id' "$ROUTES_LIVE"; then
-  ok "get-routes 门禁读取 jwt-authorizer-id"
+  ok "路由校验读取 jwt-authorizer-id"
 else
   err "verify_routes_live.sh 未引用 jwt-authorizer-id"
 fi

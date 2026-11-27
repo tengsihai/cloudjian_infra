@@ -1,19 +1,19 @@
-# INF-10 · dev 部署（方案 12.4 / 任务拆解 9.2、9.5）
-# push 到 dev：二次校验「必须是已合并 PR 的 commit」→ apply → 结构/路由门禁
-# 变更触及桶策略/分发时自动匿名穿透（闸 3）。
-# 禁 pull_request_target；带凭证 job 一律 environment: dev。
+# 部署流水线
+# push 到 release：二次校验「必须是已合并 PR 的 commit」→ apply → 结构与线上校验
+# 变更触及桶策略/分发时自动做匿名穿透验证。
+# 禁 pull_request_target；带凭证 job 一律 environment: release。
 name: deploy
 
 on:
   push:
-    branches: [dev]
+    branches: [release]
 
 permissions:
   contents: read
   pull-requests: read # gh pr list --search <sha>
 
 concurrency:
-  group: deploy-dev
+  group: deploy-release
   cancel-in-progress: false
 
 env:
@@ -24,14 +24,14 @@ env:
 jobs:
   apply:
     runs-on: ubuntu-latest
-    environment: dev
+    environment: release
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      # 9.2 防 admin 旁路直推：查不到已合并 PR 即失败、不部署
+      # 防 admin 旁路直推：查不到已合并 PR 即失败、不部署
       - name: Verify commit came from a merged PR
         env:
           GH_TOKEN: ${{ github.token }}
@@ -75,13 +75,13 @@ jobs:
           bash scripts/verify_ssm_structure.sh
           bash scripts/verify_observability_structure.sh
 
-      # apply 后可跑的 live 断言（SSM / 路由）；路由由 backend 注册，未注册时 routes 断言可失败
+      # apply 后可跑的 live 校验（SSM / 路由）；路由由 backend 注册，未注册时 routes 校验可失败
       - name: Live gates (SSM + routes)
         run: |
-          bash scripts/verify_ssm_live.sh || true
+          bash scripts/verify_ssm_live.sh
           bash scripts/verify_routes_live.sh || true
 
-      # 9.5 闸 3：变更涉及桶策略/分发行为 → 匿名穿透
+      # 变更涉及桶策略/分发行为 → 匿名穿透验证
       - name: Detect policy/CDN changes
         id: changed
         run: |
@@ -92,6 +92,6 @@ jobs:
             echo "penetrate=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Anonymous CDN penetration (闸 3)
+      - name: Anonymous CDN penetration
         if: steps.changed.outputs.penetrate == 'true'
         run: bash scripts/verify_cdn_matrix.sh

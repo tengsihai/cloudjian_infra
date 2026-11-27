@@ -1,5 +1,5 @@
-# INF-02 OAC + INF-03 CloudFront 分发与 Function（架构 8.4 / 11.1）
-# 三道闸之闸 1（桶策略）在 storage 模块，依赖本模块输出的 distribution_arn。
+# OAC、CloudFront 分发与路径白名单 Function
+# 桶策略在 storage 模块，依赖本模块输出的 distribution_arn。
 
 # ————————————————————————————— OAC —————————————————————————————
 
@@ -12,7 +12,7 @@ resource "aws_cloudfront_origin_access_control" "data" {
 }
 
 # ————————————————————————————— Function（viewer-request 白名单） —————————————————————————————
-# 闸 2：放行 /web/* 与 /users/{uuid}/assets/public/*；
+# 白名单（第 2 项控制）：放行 /web/* 与 /users/{uuid}/assets/public/*；
 # 其余 /users/*、index.parquet、.dir_meta.json、assets/private/* → 403 终态；
 # 无扩展名 → rewrite /web/index.html（含 /p/{token}）；
 # /web/* 交源站（缺失如实 404，不得改写成 HTML）。
@@ -20,7 +20,7 @@ resource "aws_cloudfront_origin_access_control" "data" {
 resource "aws_cloudfront_function" "path_whitelist" {
   name    = "${var.project}-path-whitelist"
   runtime = "cloudfront-js-2.0"
-  comment = "Path whitelist + SPA rewrite; private paths terminal 403 (架构 11.1 闸2)"
+  comment = "Path whitelist + SPA rewrite; private paths terminal 403"
   publish = true
   code    = <<-EOT
 function handler(event) {
@@ -37,7 +37,7 @@ function handler(event) {
     };
   }
 
-  // —— 闸 2a：敏感文件名一票 403（任意路径命中即拒） ——
+  // —— 2a：敏感文件名一票 403（任意路径命中即拒） ——
   if (
     uri.indexOf("index.parquet") !== -1 ||
     uri.indexOf(".dir_meta.json") !== -1 ||
@@ -46,7 +46,7 @@ function handler(event) {
     return forbid();
   }
 
-  // —— 闸 2b：/users/* 仅放行 assets/public 前缀 ——
+  // —— 2b：/users/* 仅放行 assets/public 前缀 ——
   if (uri.indexOf("/users/") === 0) {
     // /users/{uuid}/assets/public/...
     var m = uri.match(/^\/users\/[^\/]+\/assets\/public(\/|$)/);
@@ -89,7 +89,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     domain_name              = var.data_bucket_regional_domain_name
   }
 
-  # 默认 Behavior：* → S3（架构 8.4：必须存在，绕不过）
+  # 默认 Behavior：* → S3（必须存在，绕不过）
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
@@ -100,9 +100,14 @@ resource "aws_cloudfront_distribution" "cdn" {
 
     viewer_protocol_policy = "redirect-to-https"
     compress               = true
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.path_whitelist.arn
+    }
   }
 
-  # 公开图：Origin 进入缓存键（架构 8.4 / 常见坑：首个无 Origin 响应
+  # 公开图：Origin 进入缓存键（常见坑：首个无 Origin 响应
   # 会把“无 ACAO”缓存住 → canvas 缩略图间歇失败）
   ordered_cache_behavior {
     path_pattern     = "/users/*/assets/public/*"
@@ -114,9 +119,16 @@ resource "aws_cloudfront_distribution" "cdn" {
 
     viewer_protocol_policy = "redirect-to-https"
     compress               = true
+
+    # 白名单必须在每条 behavior 上都挂：否则 /users/*/assets/public/index.parquet
+    # 会绕过敏感名判定直接命中源站
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.path_whitelist.arn
+    }
   }
 
-  # SPA 用函数 rewrite，不用自定义错误页（403/404→200 与函数 403 互斥，架构 8.4）
+  # SPA 用函数 rewrite，不用自定义错误页（403/404→200 与函数 403 互斥）
 
   restrictions {
     geo_restriction {
@@ -129,7 +141,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     minimum_protocol_version       = "TLSv1.2_2021"
   }
 
-  # 标准访问日志 → 数据桶同款日志桶（免费额度外只付存储；方案 12.7）
+  # 标准访问日志 → 数据桶同款日志桶（免费额度外只付存储）
   logging_config {
     include_cookies = false
     bucket          = var.logs_bucket_domain_name

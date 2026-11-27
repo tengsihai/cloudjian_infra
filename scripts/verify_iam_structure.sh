@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# P-05 结构门禁：三角色 sub 精确匹配、terraform 角色无 lambda:*、
+# 结构校验：三角色 sub 精确匹配、terraform 角色无 lambda:*、
 # PassRole 限定、lambda-role 不含 deploy/*、scheduler 仅 maintenance:live。
 set -euo pipefail
 
@@ -85,6 +85,25 @@ if awk '/aws_iam_role_policy" "gha_backend"/,/^}/' "$TF" | grep -q 'release/\*';
   ok "backend 写方含 release/*"
 else
   err "backend 写方缺少 release/*"
+fi
+
+# 9) lambda-role Cognito 段：动作逐一列举、限本池、含删除用户所需 AdminDeleteUser
+LAMBDA_BLOCK=$(awk '/aws_iam_role_policy" "lambda_execution"/,/^}/' "$TF")
+if echo "$LAMBDA_BLOCK" | grep -q '"cognito-idp:\*"'; then
+  err "lambda-role 使用 cognito-idp:*（必须逐一列举）"
+else
+  ok "Cognito 未使用通配动作"
+fi
+for act in GetUser AdminGetUser AdminUserGlobalSignOut AdminCreateUser AdminAddUserToGroup \
+           AdminRemoveUserFromGroup AdminDisableUser AdminEnableUser AdminResetPassword AdminDeleteUser; do
+  if ! echo "$LAMBDA_BLOCK" | grep -q "\"cognito-idp:$act\""; then
+    err "Cognito 动作缺 cognito-idp:$act"
+  fi
+done
+if echo "$LAMBDA_BLOCK" | grep -q 'cognito_user_pool_arn'; then
+  ok "Cognito 动作限本用户池"
+else
+  err "Cognito 动作 Resource 未收窄到用户池 ARN"
 fi
 
 if [[ "$FAIL" -ne 0 ]]; then

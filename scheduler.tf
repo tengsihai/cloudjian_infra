@@ -1,4 +1,4 @@
-# INF-08 装配（P-08）— EventBridge Scheduler
+# 调度装配 — EventBridge Scheduler
 
 module "scheduler" {
   source = "./modules/scheduler"

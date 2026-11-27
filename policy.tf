@@ -1,5 +1,5 @@
-# INF-02 桶策略与 CORS 装配（依赖 cdn 输出的分发 ARN/域名）
-# 闸 1：仅两条 Resource；SourceArn 用分发 ARN，禁止写死账户 ID。
+# 桶策略与 CORS 装配（依赖 cdn 输出的分发 ARN/域名）
+# 桶策略只允许两条 Resource；SourceArn 用分发 ARN，禁止写死账户 ID。
 
 module "cdn" {
   source = "./modules/cdn"

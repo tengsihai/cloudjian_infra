@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# P-04 结构门禁：密码策略、Token 有效期、SRP-only、WriteAttributes 空。
-# Cognito 无 MaximumLength（TODO-PWD-01）——本脚本同时断言 TF 里没有 max_length 幻觉字段。
+# 结构校验：密码策略、Token 有效期、SRP-only、WriteAttributes 空。
+# Cognito 无 MaximumLength——本脚本同时校验 TF 里没有 max_length 这种不存在的字段。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -15,7 +15,7 @@ grep -q 'minimum_length    = 8\|minimum_length = 8' "$TF" \
   && ok "MinimumLength=8" || err "密码最小长度不是 8"
 
 grep -q 'require_symbols   = false\|require_symbols = false' "$TF" \
-  && ok "RequireSymbols=false" || err "符号不应强制（P-B）"
+  && ok "RequireSymbols=false" || err "符号不应强制"
 
 for k in require_lowercase require_uppercase require_numbers; do
   grep -qE "$k\s*=\s*true" "$TF" && ok "$k=true" || err "$k 必须为 true"
@@ -23,7 +23,7 @@ done
 
 # 不得出现 MaximumLength 幻觉（Cognito 无此参数）
 if grep -qi 'maximum_length' "$TF"; then
-  err "出现 maximum_length——Cognito 密码策略无此字段（TODO-PWD-01）"
+  err "出现 maximum_length——Cognito 密码策略无此字段"
 else
   ok "无 maximum_length 幻觉字段"
 fi
@@ -35,10 +35,11 @@ grep -qE 'id_token_validity\s*=\s*20' "$TF" \
 
 grep -q 'ALLOW_USER_SRP_AUTH' "$TF" \
   && ok "SRP 流已开" || err "缺少 ALLOW_USER_SRP_AUTH"
-if grep -q 'ALLOW_REFRESH_TOKEN_AUTH\|ALLOW_USER_PASSWORD_AUTH\|ALLOW_CUSTOM_AUTH' "$TF"; then
-  err "开了非 SRP 授权流（架构 4.2：无 RefreshToken、密码不出网）"
+FLOWS=$(awk '/explicit_auth_flows/,/\]/' "$TF" | grep -oE 'ALLOW_[A-Z_]+' | sort -u | tr '\n' ' ')
+if [[ "$FLOWS" == "ALLOW_USER_SRP_AUTH " ]]; then
+  ok "explicit_auth_flows 白名单恰为 ALLOW_USER_SRP_AUTH"
 else
-  ok "仅 SRP（无 refresh/password/custom 流）"
+  err "explicit_auth_flows = [${FLOWS% }]（只允许 ALLOW_USER_SRP_AUTH）"
 fi
 
 grep -qE 'write_attributes\s*=\s*\[\]' "$TF" \

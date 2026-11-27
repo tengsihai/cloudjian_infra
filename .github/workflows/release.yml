@@ -1,6 +1,6 @@
-# INF-10 · main 归档（方案 12.4 / 任务拆解 9.3）
+# 归档流水线（零部署）
 # 零部署步骤：打 tag、CHANGELOG 片段、写 /cloudjian/release/archive。
-# 带凭证 job 必须 environment: dev（与部署同一 environment 口径，sub 不变）。
+# 带凭证 job 必须 environment: release（与部署同一 environment 口径，sub 不变）。
 name: release
 
 on:
@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write # 打 tag
+  pull-requests: read # gh pr list 校验合并来源
 
 concurrency:
   group: release-main
@@ -20,14 +21,14 @@ env:
 jobs:
   archive:
     runs-on: ubuntu-latest
-    environment: dev
+    environment: release
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      # main 只接收 dev 的 PR；同样做二次校验
+      # main 只接收 release 的 PR；同样做二次校验
       - name: Verify commit came from a merged PR
         env:
           GH_TOKEN: ${{ github.token }}
@@ -73,7 +74,7 @@ jobs:
           git commit -m "changelog: ${TAG}" || true
           git push origin HEAD:${GITHUB_REF_NAME} || true
 
-      # 唯一允许写 release/archive 的路径（架构 10.2）
+      # 唯一允许写 release/archive 的路径
       - name: Write /cloudjian/release/archive
         run: |
           PAYLOAD=$(python - <<'PY'
@@ -95,11 +96,11 @@ jobs:
             --region "$AWS_REGION"
           echo "release/archive written"
 
-      # 断言：本 workflow 不含 apply/destroy
+      # 校验：本 workflow 不含 apply/destroy
       - name: Assert zero deploy steps
         run: |
           if grep -nE 'terraform apply|terraform destroy|aws s3 sync' .github/workflows/release.yml | grep -v 'Assert' ; then
-            echo "::error::release.yml 含部署步骤（红线：main 零部署）"
+            echo "::error::release.yml 含部署步骤（硬性约束：main 零部署）"
             exit 1
           fi
           echo "OK: release.yml 零部署"

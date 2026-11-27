@@ -1,4 +1,4 @@
-# INF-01 桶与生命周期（架构 10.6 / 方案 12.7）
+# 桶与生命周期
 # - 数据桶：BPA、Versioning、加密、标签生命周期、访问日志
 # - 状态桶由 scripts/bootstrap_state.sh 创建（不进本状态，避免自举循环）
 # - 生命周期一律 cj:retention 标签过滤，禁止 prefix（字面匹配命中 0 个不报错）
@@ -6,7 +6,7 @@
 locals {
   name = var.project # cloudjian
 
-  # 标签值白名单：新增档位必须同步新增规则（架构 10.6）
+  # 标签值白名单：新增档位必须同步新增规则
   retention_values = ["30d", "1d"]
 }
 
@@ -48,7 +48,7 @@ resource "aws_s3_bucket_ownership_controls" "data" {
   }
 }
 
-# 访问日志：独立日志桶，保留 30 天（方案 12.7；日志桶不放业务数据）
+# 访问日志：独立日志桶，保留 30 天（日志桶不放业务数据）
 resource "aws_s3_bucket" "logs" {
   bucket = "${local.name}-s3-logs-tokyo"
 }
@@ -96,7 +96,7 @@ resource "aws_s3_bucket_logging" "data" {
 }
 
 # ————————————————————————————— 生命周期（标签，不用前缀） —————————————————————————————
-# 架构 10.6：prefix 是字面匹配，users/*/trash/ 命中 0 个且不报错。
+# prefix 是字面匹配：users/*/trash/ 命中 0 个且不报错，所以生命周期只用标签。
 # 三条规则 = 两个标签档 + 一个桶级兜底。
 
 resource "aws_s3_bucket_lifecycle_configuration" "data" {
@@ -152,7 +152,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
   }
 
   # 桶级兜底：无标签对象（正文、index.parquet、shards、_refs、jobs…）
-  # 非当前版本 7 天 + 只留 3 份 + 删除标记过期（F12）+ 未完成分片 7 天
+  # 非当前版本 7 天 + 只留 3 份 + 删除标记过期 + 未完成分片 7 天
   # 注：expired_object_delete_marker 为布尔属性，与 expiration 块互斥（只清删除标记的规则不设 expiration）
   rule {
     id     = "bucket-fallback-noncurrent"

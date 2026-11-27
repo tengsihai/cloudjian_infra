@@ -1,10 +1,10 @@
-# INF-07 SSM 参数总线（架构 10.2 / 方案 12.2）
+# SSM 参数总线
 # 前缀 /cloudjian/<key>，单环境无 env 段；Standard 类型（免费、非机密）。
 # 单一写方：本模块写 11 条 infra 参数 + release/archive 占位；
 # release/backend、release/frontend 由各仓 CI 写，infra 不得创建。
 
 locals {
-  # 架构 10.2 全表（infra 写入方）
+  # 参数全表（infra 写入方）
   bus = {
     bucket               = var.bucket
     cdn-domain           = var.cdn_domain
@@ -39,7 +39,7 @@ resource "aws_ssm_parameter" "bus" {
   }
 }
 
-# release/archive：架构 10.2 规定「infra 唯一写入」。
+# release/archive：「infra 唯一写入」。
 # TF 保证键存在（首 apply 即入表）；main 归档流水线覆盖 value，
 # ignore_changes 避免归档写入后每次 plan 报漂移。
 resource "aws_ssm_parameter" "release_archive" {

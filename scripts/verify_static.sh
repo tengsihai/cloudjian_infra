@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# P-00 静态门禁：可本地复跑，不依赖控制台。
-#  0.6  账户 ID 不得出现在 TF 字面量（12 位数字）
-#  红线5 Terraform 中不得出现 aws_lambda_function / aws_lambda_layer_version
-#  红线3 生命周期不得使用 prefix 通配（字面匹配陷阱）
-#  12.6 不得出现任何 VPC/子网/NAT 资源（network 为空模块）
+# 静态校验：可本地复跑，不依赖控制台。
+#  账户 ID 不得出现在 TF 字面量（12 位数字）
+#  硬性约束 5 Terraform 中不得出现 aws_lambda_function / aws_lambda_layer_version
+#  硬性约束 3 生命周期不得使用 prefix 通配（字面匹配陷阱）
+#  不得出现任何 VPC/子网/NAT 资源（network 为空模块）
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,23 +21,30 @@ else
   ok "无 12 位账户 ID 字面量"
 fi
 
-# —— 红线5 Lambda 资源 ——
+# —— 硬性约束 5 Lambda 资源 ——
 if grep -RInE --include='*.tf' 'aws_lambda_(function|layer_version|alias|permission)\b' "$ROOT"; then
   err "TF 中出现 Lambda 资源；Lambda 全生命周期归 cloudjian-backend"
 else
   ok "无 aws_lambda_* 资源（add-permission 亦归 backend）"
 fi
 
-# —— 红线3 生命周期 prefix 通配 ——
-if grep -RInE --include='*.tf' 'prefix\s*=\s*"users/' "$ROOT"; then
-  err "生命周期/策略使用 users/ 前缀字面匹配；一律 cj:retention 标签过滤"
+# —— 硬性约束 3 生命周期不得使用任何 prefix（trash/、exports/ 等同样禁止）——
+# 只看 lifecycle 配置块；CloudFront 访问日志的 prefix 是日志落点，不在此列
+LIFECYCLE_HITS=""
+while IFS= read -r f; do
+  if awk '/aws_s3_bucket_lifecycle_configuration/,/^}/' "$f" | grep -nE '\bprefix\s*='; then
+    LIFECYCLE_HITS="$LIFECYCLE_HITS $f"
+  fi
+done < <(grep -Rl --include='*.tf' 'aws_s3_bucket_lifecycle_configuration' "$ROOT")
+if [[ -n "$LIFECYCLE_HITS" ]]; then
+  err "生命周期使用 prefix 过滤：$LIFECYCLE_HITS；一律 cj:retention 标签过滤"
 else
-  ok "无 users/ prefix 规则"
+  ok "生命周期无 prefix 过滤"
 fi
 
 # —— 12.6 无 VPC 资源（只匹配 resource/data 声明，忽略注释） ——
 if grep -RInE --include='*.tf' '^(resource|data)\s+"aws_(vpc|subnet|nat_gateway|internet_gateway|route_table|route|vpc_endpoint|default_network_acl|default_security_group)"' "$ROOT"; then
-  err "出现 VPC 类资源声明；方案 12.6 决策不建 VPC"
+  err "出现 VPC 类资源声明；当前决策为不建 VPC"
 else
   ok "无 VPC 类资源声明"
 fi

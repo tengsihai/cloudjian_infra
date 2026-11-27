@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# P-06 实测门禁（apply 后）：apigatewayv2 get-routes 逐条断言。
-# 归档快照（含授权方式）作为交接物给 T2/T3/T4。
+# 实测校验（apply 后）：apigatewayv2 get-routes 逐条校验。
+# 归档快照（含授权方式）作为交接物。
 #
 # 用法：
-#   ./scripts/verify_routes_live.sh            # 断言 + 打印快照
+#   ./scripts/verify_routes_live.sh            # 校验 + 打印快照
 #   SNAPSHOT=routes.json ./scripts/verify_routes_live.sh   # 另存 JSON
 set -euo pipefail
 
@@ -31,7 +31,7 @@ def err(m):
     print("FAIL:", m, file=sys.stderr)
     fail = 1
 
-# 红线1：无 $default
+# 硬性约束 1：无 $default
 if any(r.get("RouteKey") == "$default" for r in routes):
     err("存在 $default 路由")
 else:
@@ -51,7 +51,7 @@ elif n8.get("AuthorizerId"):
 else:
     ok("N8 = NONE 且无 authorizer")
 
-# 其余业务路由：JWT + authorizer_id 一致
+# 其余业务路由：JWT + authorizer_id 一致（N8 之外不允许 NONE）
 expected_jwt = [
     "GET /notes", "POST /notes",
     "GET /notes/{note_id}", "PUT /notes/{note_id}", "DELETE /notes/{note_id}",
@@ -63,6 +63,7 @@ expected_jwt = [
     "POST /assets/presign", "POST /assets/register",
     "GET /assets/{asset_id}/url", "POST /assets/urls",
     "GET /admin/users", "POST /admin/users", "PATCH /admin/users/{sub}",
+    "DELETE /admin/users/{sub}",
     "POST /admin/users/{sub}/reset",
     "POST /exports", "GET /exports/{job_id}",
     "POST /notes/{note_id}/visibility",
@@ -73,25 +74,28 @@ if missing:
 else:
     ok(f"核心路由齐全 ({len(expected_jwt)} 条)")
 
+# 全量：除 N8 外每条路由都必须 JWT 且 authorizer 与 SSM 一致
 bad = []
-for k in expected_jwt:
-    r = by_key.get(k)
-    if not r:
+for k, r in by_key.items():
+    if k in ("GET /public/notes/{public_token}", "$default"):
         continue
     if r.get("AuthorizationType") != "JWT":
         bad.append(f"{k}: type={r.get('AuthorizationType')}")
     elif r.get("AuthorizerId") != authorizer_id:
         bad.append(f"{k}: authorizer={r.get('AuthorizerId')}")
 if bad:
-    err("JWT 断言失败: " + "; ".join(bad))
+    err("JWT 校验失败: " + "; ".join(bad))
 else:
-    ok("全部核心路由 JWT 且 AuthorizerId 与 SSM 一致")
+    ok("N8 之外全部路由均为 JWT 且 authorizer 与 SSM 一致")
 
-# M4 不挂载
-if "DELETE /admin/users/{sub}" in by_key:
-    err("挂载了 DELETE /admin/users/{sub} (M4)")
+# 删除普通用户：必须已挂载，且是 JWT
+m4 = by_key.get("DELETE /admin/users/{sub}")
+if not m4:
+    err("缺少 DELETE /admin/users/{sub}（共同文档已列为正式接口）")
+elif m4.get("AuthorizationType") != "JWT":
+    err(f"DELETE /admin/users/{sub} AuthorizationType={m4.get('AuthorizationType')} (want JWT)")
 else:
-    ok("M4 不挂载")
+    ok("DELETE /admin/users/{sub} 已挂载且为 JWT")
 
 # maintenance 不暴露
 if any("maintenance" in (r.get("RouteKey") or "") for r in routes):

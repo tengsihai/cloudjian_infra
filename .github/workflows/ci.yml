@@ -1,11 +1,11 @@
-# INF-10 · PR 校验 + plan 摘要（方案 12.4 / 任务拆解 9.1）
-# feat/* → PR：lint（无凭证）→ plan（有凭证，environment: dev）→ 摘要贴评论
+# PR 校验 + plan 摘要
+# feat/* → PR：lint（无凭证）→ plan（有凭证，environment: release）→ 摘要贴评论
 # 禁 pull_request_target；Action 全部按 commit SHA 锁。
 name: ci
 
 on:
   pull_request:
-    branches: [dev]
+    branches: [release]
     paths-ignore:
       - "docs/**"
       - "**.md"
@@ -66,11 +66,11 @@ jobs:
           bash scripts/verify_observability_structure.sh
           bash scripts/verify_ci_structure.sh
 
-  # —— plan：需要 AWS 凭证，必须 environment: dev（Y1 硬约束）——
+  # —— plan：需要 AWS 凭证，必须 environment: release ——
   plan:
     needs: lint
     runs-on: ubuntu-latest
-    environment: dev
+    environment: release
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

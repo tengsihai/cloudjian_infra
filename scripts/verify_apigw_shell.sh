@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# INF-05 结构门禁：infra 只建 API 壳（API / Stage / JWT 授权器 / CORS），
+# 结构校验：infra 只建 HTTP API（API / Stage / JWT 授权器 / CORS），
 # 路由与集成归 backend；infra 不得出现任何路由、集成或函数名清单。
-# 路由红线（无 $default、仅 N8 匿名、M4 不挂载）由 backend CI 校验（契约 §2.6）。
+# 路由硬性约束（无 $default、仅 N8 匿名）由 backend CI 校验。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -60,7 +60,7 @@ else
   err "访问日志保留期不是 30"
 fi
 
-# 7) 红线：infra TF 不得建 Lambda
+# 7) 硬性约束：infra TF 不得建 Lambda
 if grep -qE 'resource\s+"aws_lambda_' "$TF"; then
   err "apigw 模块出现 aws_lambda_*"
 else

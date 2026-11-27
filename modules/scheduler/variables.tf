@@ -21,7 +21,7 @@ variable "schedule_timezone" {
 
 variable "flexible_window_minutes" {
   description = <<-EOT
-    弹性窗口（分钟）。函数未就绪窗口（方案 12.2 / 任务拆解 8.4）内
+    弹性窗口（分钟）。函数未就绪窗口内
     直调失败可读；弹性窗口避免整点错过。设 0 = OFF。
   EOT
   type        = number

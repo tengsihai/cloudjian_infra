@@ -15,7 +15,7 @@ output "cost_allocation_tag_keys" {
 }
 
 output "alarm_names" {
-  description = "交接 T4 的告警基线清单"
+  description = "告警基线清单（运维交接）"
   value = sort([
     aws_cloudwatch_metric_alarm.api_5xx.alarm_name,
     aws_cloudwatch_metric_alarm.cdn_5xx.alarm_name,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# P-09 INF-10 结构门禁（9.1–9.8 静态审查）。
+# 流水线结构校验。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,7 +19,7 @@ done
 # 只拦真实触发键（`on:` 段或顶层键），忽略注释里的「禁 pull_request_target」说明
 if grep -RhE '^\s*(pull_request_target|on:.*pull_request_target)' "$WF" >/dev/null 2>&1 \
   || grep -RhE '^\s+pull_request_target\s*:' "$WF" >/dev/null 2>&1; then
-  err "出现 pull_request_target 触发（公开仓红线）"
+  err "出现 pull_request_target 触发（公开仓硬性约束）"
 else
   ok "无 pull_request_target 触发"
 fi
@@ -32,8 +32,8 @@ else
   ok "全部 uses 按 commit SHA 锁"
 fi
 
-# —— 9.7 凭证 job 必须 environment: dev；纯 lint 不得强制 ——
-# 带 configure-aws-credentials 的 job 所在 job 块需含 environment: dev
+# —— 凭证 job 必须 environment: release；纯 lint 不得强制 ——
+# 带 AWS 凭证的 job 所在 job 块需含 environment: release
 python - <<'PY' "$WF" || FAIL=1
 import re, sys, pathlib
 wf = pathlib.Path(sys.argv[1])
@@ -48,7 +48,7 @@ def ok(m):
 for path in sorted(wf.glob("*.yml")):
     text = path.read_text(encoding="utf-8")
     # 按 job: 顶层键切分（缩进 2 的 job 名）
-    # 简化：若文件含 configure-aws-credentials，则每个含该 step 的 job 块必须有 environment: dev
+    # 简化：若文件含 AWS 凭证 step，则每个含该 step 的 job 块必须有 environment: release
     if "configure-aws-credentials" not in text:
         continue
     # 拆 jobs 段
@@ -66,10 +66,10 @@ for path in sorted(wf.glob("*.yml")):
             continue
         job = jm.group(1)
         if "configure-aws-credentials" in part:
-            if re.search(r"(?m)^\s+environment:\s*dev\s*$", part):
-                ok(f"{path.name}:{job} environment: dev")
+            if re.search(r"(?m)^\s+environment:\s*release\s*$", part):
+                ok(f"{path.name}:{job} environment: release")
             else:
-                err(f"{path.name}:{job} 带 AWS 凭证但未声明 environment: dev")
+                err(f"{path.name}:{job} 带 AWS 凭证但未声明 environment: release")
         else:
             # 纯 lint 不应有 environment（可选，不强制失败）
             pass
@@ -146,10 +146,10 @@ else
 fi
 
 # environment 硬约束写进 README
-if grep -q 'environment: dev' "$ROOT/README.md"; then
-  ok "README 记载 environment: dev"
+if grep -q 'environment: release' "$ROOT/README.md"; then
+  ok "README 记载 environment: release"
 else
-  err "README 缺 environment: dev 约束"
+  err "README 缺 environment: release 约束"
 fi
 
 if [[ "$FAIL" -ne 0 ]]; then
