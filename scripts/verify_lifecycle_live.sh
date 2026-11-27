@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 实测校验（apply 后、需 AWS 凭证）：
 #   造 4 类对象 → get-object-tagging 校验标签 → list-objects-v2 校验规则命中 >0。
-# 长周期项（8 天非当前 ≤3、31 天清空）不在本脚本内，按任务拆解 G1 记录实测日志。
+# 长周期项（8 天非当前 ≤3、31 天清空）不在本脚本内，靠人工记录实测日志。
 #
 # 用法：
 #   BUCKET=cloudjian-data-tokyo ./scripts/verify_lifecycle_live.sh
@@ -96,4 +96,4 @@ if [[ "$FAIL" -ne 0 ]]; then
   exit 1
 fi
 echo "verify_lifecycle_live: PASSED"
-echo "NOTE: 8 天非当前 ≤3 / 31 天清空为长周期项，按任务拆解 G1 另记实测日志。"
+echo "NOTE: 8 天非当前 ≤3 / 31 天清空为长周期项，需另记实测日志。"

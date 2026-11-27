@@ -1,4 +1,4 @@
-# tflint — 云笺 INF-10
+# tflint — 云笺基础设施
 # 只开与本仓相关的规则；避免全量默认规则误报托管服务新属性。
 
 plugin "terraform" {

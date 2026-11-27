@@ -23,7 +23,7 @@ env:
   TF_INPUT: "false"
 
 jobs:
-  # —— 纯 lint：不声明 environment（Y1：无凭证 job 不需要）——
+  # —— 纯 lint：不声明 environment（这一步不需要凭证）——
   lint:
     runs-on: ubuntu-latest
     steps:
