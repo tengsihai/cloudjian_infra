@@ -8,9 +8,12 @@ variable "enable_vpc" {
   default     = false
 }
 
+# 当前无资源可用到 project；留给补齐 VPC 实现后的命名使用。
+# tflint-ignore: terraform_unused_declarations
 variable "project" {
-  type    = string
-  default = "cloudjian"
+  description = "项目前缀，VPC 实现后用于资源命名"
+  type        = string
+  default     = "cloudjian"
 }
 
 # 校验：当前实现只接受 false。补齐 VPC 实现时删除此 check 并按 README 接线。

@@ -4,13 +4,7 @@
 # - JOB_RUNNING / SHARE_REVOKED 由 backend 以 EMF 指标打点，infra 只建告警，不枚举函数
 # - 不枚举函数名：新增接口不需要改 infra
 
-data "aws_caller_identity" "current" {}
-data "aws_partition" "current" {}
-
 locals {
-  account_id = data.aws_caller_identity.current.account_id
-  partition  = data.aws_partition.current.partition
-
   alarm_emails = var.budget_alert_emails
 }
 

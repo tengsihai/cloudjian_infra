@@ -3,11 +3,6 @@ variable "project" {
   default = "cloudjian"
 }
 
-variable "region" {
-  type    = string
-  default = "ap-northeast-1"
-}
-
 variable "api_id" {
   description = "HTTP API ID（5xx 告警维度）"
   type        = string

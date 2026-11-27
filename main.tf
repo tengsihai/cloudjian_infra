@@ -3,7 +3,6 @@
 
 locals {
   workspace = terraform.workspace
-  name      = var.project # cloudjian
 }
 
 # workspace 校验：只允许 tokyo，防止误在 default 上 apply

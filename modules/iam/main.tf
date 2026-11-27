@@ -71,7 +71,7 @@ resource "aws_iam_role_policy" "gha_frontend" {
         Effect = "Allow"
         Action = ["s3:PutObject", "s3:DeleteObject", "s3:ListBucket", "s3:GetObject"]
         Resource = [
-          "${var.data_bucket_arn}",
+          var.data_bucket_arn,
           "${var.data_bucket_arn}/web/*",
         ]
         Condition = {
