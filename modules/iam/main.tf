@@ -1,7 +1,7 @@
-# INF-06 IAM（架构 10.3 / 方案 12.5）
+# IAM 角色与策略
 # 三仓 GHA 角色 + lambda 执行角色 + scheduler 角色。
-# TODO-OPS-01：sub 必须以 assume-role-with-web-identity 回读实际值后定稿；
-# 本模块默认写 environment 口径，immutable subject 形式见 variables.tf 说明。
+# sub 以 assume-role-with-web-identity 回读的实际值为准；
+# 本模块写 environment 口径，immutable subject 形式见 variables.tf 说明。
 
 # ————————————————————————————— 数据来源 —————————————————————————————
 
@@ -16,12 +16,12 @@ locals {
   # GHA OIDC 账号提供方（三仓共用一个 provider，角色用 sub 区分）
   oidc_provider_arn = "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:oidc-provider/token.actions.githubusercontent.com"
 
-  # TODO-OPS-01：若仓库为 2026-07-15 后新建且启用 immutable subject claims，
-  # sub 形如 repo:org@id/repo@id:environment:dev —— 以下三个变量改为实测值。
-  # 实测方法见 scripts/verify_oidc_sub.sh。
-  sub_frontend  = "repo:tengsihai/cloudjian-frontend:environment:dev"
-  sub_backend   = "repo:tengsihai/cloudjian-backend:environment:dev"
-  sub_terraform = "repo:tengsihai/cloudjian-infra:environment:dev"
+  # 若仓库为 2026-07-15 后新建且启用 immutable subject claims，
+  # sub 形如 repo:org@id/repo@id:environment:release —— 以下三个变量改为实测值。
+  # 实测方法：在目标仓库跑一次带 environment 的 job，值取自该 job 的 OIDC token（或 CloudTrail 里的 subject）。
+  sub_frontend  = "repo:tengsihai/cloudjian-frontend:environment:release"
+  sub_backend   = "repo:tengsihai/cloudjian-backend:environment:release"
+  sub_terraform = "repo:tengsihai/cloudjian-infra:environment:release"
 
   # 函数清单归 backend；infra 只保留固定别名与 maintenance 名
   lambda_alias         = "live"
@@ -146,7 +146,7 @@ resource "aws_iam_role_policy" "gha_backend" {
     Version = "2012-10-17"
     Statement = [
       {
-        # H4 冒烟「写后即删」+ 重试清残留必需（方案 12.5 K1）
+        # 「写后即删」+ 重试清残留必需
         Sid    = "DeployArtifacts"
         Effect = "Allow"
         Action = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
@@ -166,7 +166,7 @@ resource "aws_iam_role_policy" "gha_backend" {
         }
       },
       {
-        # Lambda 全套发布动作（方案 12.5；maintenance 也由本仓创建）
+        # Lambda 全套发布动作（maintenance 也由本仓创建）
         Sid    = "LambdaPublish"
         Effect = "Allow"
         Action = [
@@ -207,7 +207,7 @@ resource "aws_iam_role_policy" "gha_backend" {
         Resource = "arn:${local.partition}:lambda:${var.region}:${local.account_id}:layer:cloudjian-*"
       },
       {
-        # 路由与集成归 backend（架构 10.4）：新增接口只改 backend，不动 infra
+        # 路由与集成归 backend：新增接口只改 backend，不动 infra
         Sid    = "ManageApiRoutes"
         Effect = "Allow"
         Action = ["apigateway:GET", "apigateway:POST", "apigateway:PATCH", "apigateway:DELETE"]
@@ -217,7 +217,7 @@ resource "aws_iam_role_policy" "gha_backend" {
         ]
       },
       {
-        # 函数由 backend 创建；日志组用 Lambda 默认组并设 30 天保留（架构 10.7）
+        # 函数由 backend 创建；日志组用 Lambda 默认组并设 30 天保留
         Sid    = "FunctionLogs"
         Effect = "Allow"
         Action = [
@@ -230,7 +230,7 @@ resource "aws_iam_role_policy" "gha_backend" {
         ]
       },
       {
-        # 精确到 lambda-role（方案 12.5）
+        # 精确到 lambda-role
         Sid      = "PassLambdaRole"
         Effect   = "Allow"
         Action   = ["iam:PassRole"]
@@ -312,7 +312,7 @@ resource "aws_iam_role_policy" "gha_terraform" {
         ]
       },
       {
-        # PassRole 仅限调度角色（方案 12.5 F4）
+        # PassRole 仅限调度角色
         Sid      = "PassSchedulerRole"
         Effect   = "Allow"
         Action   = ["iam:PassRole"]
@@ -365,7 +365,7 @@ resource "aws_iam_role_policy" "gha_terraform" {
         ]
       },
       {
-        # 区域收窄（方案 12.6 取舍：api-id 含随机段无法按名收窄）
+        # 区域收窄（取舍：api-id 含随机段无法按名收窄）
         Sid    = "ManageAPIGW"
         Effect = "Allow"
         Action = ["apigateway:*"]
@@ -410,7 +410,7 @@ resource "aws_iam_role_policy" "gha_terraform" {
         Resource = "arn:${local.partition}:budgets:${var.region}:${local.account_id}:budget/${var.project}*"
       },
       {
-        # 调度（方案 12.5：漏了会让 apply 建调度 AccessDenied）
+        # 调度（漏了会让 apply 建调度 AccessDenied）
         Sid    = "ManageScheduler"
         Effect = "Allow"
         Action = [
@@ -425,7 +425,7 @@ resource "aws_iam_role_policy" "gha_terraform" {
         ]
       },
       {
-        # 告警（架构 10.7）：PutMetricAlarm 等；资源按 cloudjian-* 前缀收窄
+        # 告警：PutMetricAlarm 等；资源按 cloudjian-* 前缀收窄
         Sid    = "ManageAlarms"
         Effect = "Allow"
         Action = [
@@ -470,7 +470,7 @@ resource "aws_iam_role_policy" "gha_terraform" {
 }
 
 # ————————————————————————————— Lambda 执行角色 —————————————————————————————
-# 归 infra 创建；backend 挂载不修改（架构 10.4 / 方案 12.3）
+# 归 infra 创建；backend 挂载不修改
 
 resource "aws_iam_role" "lambda_execution" {
   name = "${var.project}-lambda-role"
@@ -519,7 +519,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
           "logs:DescribeLogStreams", "logs:TagLogGroup",
         ]
         Resource = [
-          # 默认路径 + 架构 10.7 自定义组（组名 = 函数名）
+          # 默认路径 + 自定义组（组名 = 函数名）
           "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/cloudjian-*",
           "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/cloudjian-*:*",
           "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:cloudjian-*",
@@ -527,7 +527,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
         ]
       },
       {
-        # Cognito 9 动作，逐一列举限本池（方案 12.3）
+        # Cognito 10 动作，逐一列举限本池（AdminDeleteUser 供删除用户收尾）
         Sid    = "Cognito"
         Effect = "Allow"
         Action = [
@@ -540,6 +540,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
           "cognito-idp:AdminDisableUser",
           "cognito-idp:AdminEnableUser",
           "cognito-idp:AdminResetPassword",
+          "cognito-idp:AdminDeleteUser",
         ]
         Resource = var.cognito_user_pool_arn
       },
