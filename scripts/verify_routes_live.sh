@@ -67,6 +67,7 @@ expected_jwt = [
     "POST /admin/users/{sub}/reset",
     "POST /exports", "GET /exports/{job_id}",
     "POST /notes/{note_id}/visibility",
+    "POST /profile/password",
 ]
 missing = [k for k in expected_jwt if k not in by_key]
 if missing:

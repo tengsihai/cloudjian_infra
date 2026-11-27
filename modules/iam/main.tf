@@ -493,11 +493,15 @@ resource "aws_iam_role_policy" "lambda_execution" {
     Version = "2012-10-17"
     Statement = [
       {
-        # 限 users/*，不含 deploy/*（Y9 最小权限）
-        Sid      = "S3UserData"
-        Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
-        Resource = "${var.data_bucket_arn}/users/*"
+        # 限 users/* 与桶根 exports/*，不含 deploy/* 等其它前缀
+        Sid    = "S3UserData"
+        Effect = "Allow"
+        Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
+        Resource = [
+          "${var.data_bucket_arn}/users/*",
+          # 导出包在桶根 exports/，不在用户目录下
+          "${var.data_bucket_arn}/exports/*",
+        ]
       },
       {
         Sid      = "S3ListUsers"
@@ -506,7 +510,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
         Resource = var.data_bucket_arn
         Condition = {
           StringLike = {
-            "s3:prefix" = ["users/", "users/*", ""]
+            "s3:prefix" = ["users/", "users/*", "exports/", "exports/*", ""]
           }
         }
       },
@@ -527,7 +531,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
         ]
       },
       {
-        # Cognito 10 动作，逐一列举限本池（AdminDeleteUser 供删除用户收尾）
+        # Cognito 11 动作，逐一列举限本池（AdminDeleteUser 供删除用户收尾，ChangePassword 供自助改密）
         Sid    = "Cognito"
         Effect = "Allow"
         Action = [
@@ -541,8 +545,16 @@ resource "aws_iam_role_policy" "lambda_execution" {
           "cognito-idp:AdminEnableUser",
           "cognito-idp:AdminResetPassword",
           "cognito-idp:AdminDeleteUser",
+          "cognito-idp:ChangePassword",
         ]
         Resource = var.cognito_user_pool_arn
+      },
+      {
+        # 异步任务自调用（InvocationType=Event）：只放 :live 别名，不含 $LATEST 与其它别名
+        Sid      = "LambdaSelfInvoke"
+        Effect   = "Allow"
+        Action   = ["lambda:InvokeFunction"]
+        Resource = "arn:${local.partition}:lambda:${var.region}:${local.account_id}:function:${var.project}-*:${local.lambda_alias}"
       },
       {
         # CloudFront 失效（visibility_migrate 公开→私有时清 CDN）

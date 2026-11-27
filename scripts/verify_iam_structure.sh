@@ -87,7 +87,7 @@ else
   err "backend 写方缺少 release/*"
 fi
 
-# 9) lambda-role Cognito 段：动作逐一列举、限本池、含删除用户所需 AdminDeleteUser
+# 9) lambda-role Cognito 段：动作逐一列举、限本池、含删除用户与自助改密所需动作
 LAMBDA_BLOCK=$(awk '/aws_iam_role_policy" "lambda_execution"/,/^}/' "$TF")
 if echo "$LAMBDA_BLOCK" | grep -q '"cognito-idp:\*"'; then
   err "lambda-role 使用 cognito-idp:*（必须逐一列举）"
@@ -95,7 +95,8 @@ else
   ok "Cognito 未使用通配动作"
 fi
 for act in GetUser AdminGetUser AdminUserGlobalSignOut AdminCreateUser AdminAddUserToGroup \
-           AdminRemoveUserFromGroup AdminDisableUser AdminEnableUser AdminResetPassword AdminDeleteUser; do
+           AdminRemoveUserFromGroup AdminDisableUser AdminEnableUser AdminResetPassword AdminDeleteUser \
+           ChangePassword; do
   if ! echo "$LAMBDA_BLOCK" | grep -q "\"cognito-idp:$act\""; then
     err "Cognito 动作缺 cognito-idp:$act"
   fi
@@ -104,6 +105,28 @@ if echo "$LAMBDA_BLOCK" | grep -q 'cognito_user_pool_arn'; then
   ok "Cognito 动作限本用户池"
 else
   err "Cognito 动作 Resource 未收窄到用户池 ARN"
+fi
+
+# 10) 导出包在桶根 exports/：lambda-role 必须能写该前缀
+if echo "$LAMBDA_BLOCK" | grep -q 'exports/\*'; then
+  ok "lambda-role 覆盖桶根 exports/*"
+else
+  err "lambda-role 缺少 exports/*（导出包放桶根，不在用户目录）"
+fi
+
+# 11) 异步任务自调用：只放 :live 别名
+if echo "$LAMBDA_BLOCK" | grep -q 'LambdaSelfInvoke'; then
+  SELF=$(awk '/LambdaSelfInvoke/,/^      },/' "$TF")
+  if echo "$SELF" | grep -q 'lambda_alias'; then
+    ok "自调用 Resource 限到别名"
+  else
+    err "自调用 Resource 未限到别名（应引用 lambda_alias）"
+  fi
+  if echo "$SELF" | grep -qi 'LATEST'; then
+    err "自调用包含 LATEST（只应放 :live 别名）"
+  fi
+else
+  err "缺少 LambdaSelfInvoke（异步任务靠自调用续跑）"
 fi
 
 if [[ "$FAIL" -ne 0 ]]; then
