@@ -63,7 +63,7 @@ jobs:
       - name: terraform init + workspace
         run: |
           terraform init -input=false
-          terraform workspace select tokyo
+          terraform workspace select tokyo || terraform workspace new tokyo
 
       - name: terraform apply
         run: terraform apply -input=false -auto-approve
