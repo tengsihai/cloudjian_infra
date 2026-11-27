@@ -10,6 +10,7 @@ set -euo pipefail
 REGION="${AWS_REGION:-ap-northeast-1}"
 BUCKET="${BUCKET:-cloudjian-data-tokyo}"
 PREFIX="${PREFIX:-users/_lifecycle_probe/}"   # 探针前缀，验收后可清理
+EXPORTS_KEY="${EXPORTS_KEY:-exports/job-probe.zip}"   # 导出包在桶根，不在用户目录下
 FAIL=0
 
 err() { echo "FAIL: $*" >&2; FAIL=1; }
@@ -54,13 +55,13 @@ put_probe "${PREFIX}trash/probe.md" "30d"
 # 2. 标签 30d：versions
 put_probe "${PREFIX}versions/01ARZ3NDEKTSV4RRFFQ69G5FAV/probe.md" "30d"
 # 3. 标签 1d：exports
-put_probe "${PREFIX}exports/job-probe.zip" "1d"
+put_probe "$EXPORTS_KEY" "1d"
 # 4. 无标签：普通笔记（走桶级兜底）
 put_probe "${PREFIX}notes/probe.md"
 
 assert_tag "${PREFIX}trash/probe.md" "30d"
 assert_tag "${PREFIX}versions/01ARZ3NDEKTSV4RRFFQ69G5FAV/probe.md" "30d"
-assert_tag "${PREFIX}exports/job-probe.zip" "1d"
+assert_tag "$EXPORTS_KEY" "1d"
 
 # —— list-objects-v2 按标签计数（规则命中 >0）——
 count_tag() { # $1=tag_value
@@ -83,9 +84,10 @@ echo "==> cleanup probes"
 aws s3api delete-objects --bucket "$BUCKET" --region "$REGION" --delete "$(py - <<PY
 import json,sys
 prefix="${PREFIX}"
+exports_key="${EXPORTS_KEY}"
 keys=[{"Key":prefix+"trash/probe.md"},
       {"Key":prefix+"versions/01ARZ3NDEKTSV4RRFFQ69G5FAV/probe.md"},
-      {"Key":prefix+"exports/job-probe.zip"},
+      {"Key":exports_key},
       {"Key":prefix+"notes/probe.md"}]
 print(json.dumps({"Objects":keys}))
 PY
