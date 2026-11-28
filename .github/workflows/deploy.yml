@@ -61,6 +61,19 @@ jobs:
           role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
           aws-region: ap-northeast-1
 
+      # 一次性清理：日志桶已从 TF 配置移除，但 state 仍要 destroy；
+      # force_destroy=false 且桶非空会 BucketNotEmpty。先强删残留（幂等，桶不存在则跳过）。
+      # apply 转绿后可删本步。
+      - name: Purge retired logs bucket
+        run: |
+          B="cloudjian-s3-logs-tokyo"
+          if aws s3api head-bucket --bucket "$B" 2>/dev/null; then
+            echo "Purging retired bucket s3://$B"
+            aws s3 rb "s3://$B" --force
+          else
+            echo "Bucket s3://$B not present; skip"
+          fi
+
       - name: terraform init + workspace
         run: |
           terraform init -input=false

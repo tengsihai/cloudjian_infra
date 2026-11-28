@@ -389,8 +389,10 @@ resource "aws_iam_role_policy" "gha_terraform" {
       {
         # 数据桶 + 状态桶 + 待销毁的日志桶（ARN 显式列举）
         # 日志桶已从 storage 删除，但线上可能仍有该桶待 destroy：
-        # 按名收窄列入 ManageBuckets，否则删 lifecycle 时 PutLifecycleConfiguration 403；
+        # 按名收窄列入 ManageBuckets，否则删 lifecycle 时 403；
         # 桶不存在时该 ARN 无副作用。
+        # 注：DeleteBucketLifecycle 实际校验的是 s3:PutLifecycleConfiguration
+        # （不是 PutBucketLifecycleConfiguration），两者都要。
         Sid    = "ManageBuckets"
         Effect = "Allow"
         Action = [
@@ -400,11 +402,13 @@ resource "aws_iam_role_policy" "gha_terraform" {
           "s3:GetBucketPublicAccessBlock", "s3:PutBucketPublicAccessBlock",
           "s3:GetBucketCORS", "s3:PutBucketCORS", "s3:DeleteBucketCORS",
           "s3:GetBucketLifecycleConfiguration", "s3:PutBucketLifecycleConfiguration",
+          "s3:PutLifecycleConfiguration", "s3:DeleteBucketLifecycle",
           "s3:GetBucketLogging", "s3:PutBucketLogging", "s3:GetBucketOwnershipControls",
           "s3:PutBucketOwnershipControls", "s3:GetBucketTagging", "s3:PutBucketTagging",
           "s3:GetLifecycleConfiguration", "s3:ListAllMyBuckets",
           "s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket",
-          "s3:GetObjectVersion", "s3:PutObjectAcl", "s3:GetObjectAcl",
+          "s3:GetObjectVersion", "s3:DeleteObjectVersion",
+          "s3:PutObjectAcl", "s3:GetObjectAcl",
           "s3:PutBucketAcl", "s3:GetBucketAcl",
           # 刷新（plan）时 terraform 会逐个读桶属性：网站配置、请求付款、加速、
           # 复制、对象锁、通知等，逐条列举容易漏，这里放开到 GetBucket*
