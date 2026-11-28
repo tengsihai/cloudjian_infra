@@ -27,7 +27,7 @@ fi
 # —— 取 AWS 凭证的 workflow 必须声明 id-token: write ——
 for f in "$WF"/*.yml; do
   if grep -q 'role-to-assume' "$f"; then
-    if awk '/^permissions:/{p=1;next} p&&/^[A-Za-z]/{p=0} p' "$f" | grep -qE 'id-token:\s*write'; then
+    if grep -qE 'id-token:[[:space:]]*write' <<< "$(awk '/^permissions:/{p=1;next} p&&/^[A-Za-z]/{p=0} p' "$f")"; then
       ok "$(basename "$f"): 声明 id-token: write"
     else
       err "$(basename "$f") 用 OIDC 但未声明 id-token: write"

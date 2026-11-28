@@ -55,7 +55,7 @@ else
   err "frontend SSM Put 未收窄到 release/frontend"
 fi
 # frontend 不得 Put 整个 /cloudjian/*
-if awk '/gha_frontend/,/^}/' "$IAM" | grep -q 'parameter/cloudjian/\*"'; then
+if grep -q 'parameter/cloudjian/\*"' <<< "$(awk '/gha_frontend/,/^}/' "$IAM")"; then
   # 允许 GetParameter 整前缀，但 Put 语句不得用通配
   :
 fi

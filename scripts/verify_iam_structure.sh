@@ -11,6 +11,10 @@ ok()  { echo "  ok: $*"; }
 
 [[ -f "$TF" ]] || { err "缺少 $TF"; exit 1; }
 
+# 取某个 aws_iam_role_policy 块。先落成变量再匹配：管道里 grep -q 命中即退出，
+# 上游 awk 会收到 SIGPIPE（rc=141），在 pipefail 下整条流水线被判负。
+block() { awk "/aws_iam_role_policy\" \"$1\"/,/^}/" "$TF"; }
+
 # 1) 三条 sub 必须是 environment 口径；sub 用 StringLike，但只允许两种锚定形式：
 #    老仓库 repo:org/repo:environment:release；immutable subject repo:org@id/repo@id:...
 python - "$TF" <<'PY' || FAIL=1
@@ -35,15 +39,14 @@ print("  ok: 三条 sub 仅 environment 口径，含 immutable subject 两种形
 PY
 
 # 2) terraform 角色不得出现 lambda:* 动作
-if awk '/aws_iam_role_policy" "gha_terraform"/,/^}/' "$TF" | grep -qE '"lambda:[A-Z]'; then
+if grep -qE '"lambda:[A-Z]' <<< "$(block gha_terraform)"; then
   err "terraform 角色策略含 lambda:* 动作"
 else
   ok "terraform 角色无 lambda:*"
 fi
 
 # 3) lambda-role 不得含 deploy/*（只查 Resource 行，跳过注释）
-if awk '/aws_iam_role_policy" "lambda_execution"/,/^}/' "$TF" \
-  | grep -E '^\s*(Resource|"[^"]*deploy)' \
+if grep -E '^\s*(Resource|"[^"]*deploy)' <<< "$(block lambda_execution)" \
   | grep -v '^\s*#' \
   | grep -q 'deploy/'; then
   err "lambda-role 含 deploy/*（Y9 最小权限）"
@@ -52,7 +55,7 @@ else
 fi
 
 # 4) lambda-role 无 s3:* / iam:*
-if awk '/aws_iam_role_policy" "lambda_execution"/,/^}/' "$TF" | grep -qE '"(s3|iam):\*"'; then
+if grep -qE '"(s3|iam):\*"' <<< "$(block lambda_execution)"; then
   err "lambda-role 出现 s3:* 或 iam:*"
 else
   ok "lambda-role 无 s3:*/iam:*"
@@ -64,14 +67,14 @@ if grep -q 'PassLambdaRole\|PassSchedulerRole' "$TF"; then
 else
   err "缺少命名的 PassRole 限定"
 fi
-if awk '/aws_iam_role_policy" "gha_terraform"/,/^}/' "$TF" | grep -q 'lambda_execution'; then
+if grep -q 'lambda_execution' <<< "$(block gha_terraform)"; then
   err "terraform 角色可 PassRole 给 lambda（应仅 scheduler）"
 else
   ok "terraform PassRole 不含 lambda 执行角色"
 fi
 
 # 6) scheduler 仅 maintenance:live（policy 内为 ${local.maintenance_function}:${local.lambda_alias} 插值）
-SCHED_BLOCK=$(awk '/aws_iam_role_policy" "scheduler"/,/^}/' "$TF")
+SCHED_BLOCK=$(block scheduler)
 if echo "$SCHED_BLOCK" | grep -q 'local.maintenance_function' \
   && echo "$SCHED_BLOCK" | grep -q 'local.lambda_alias'; then
   ok "scheduler 限 maintenance:live"
@@ -83,21 +86,21 @@ if echo "$SCHED_BLOCK" | grep -qE 'function:\*|function:\$\{var'; then
 fi
 
 # 7) frontend 只能写 release/frontend
-if awk '/aws_iam_role_policy" "gha_frontend"/,/^}/' "$TF" | grep -q 'release/frontend'; then
+if grep -q 'release/frontend' <<< "$(block gha_frontend)"; then
   ok "frontend 写方限 release/frontend"
 else
   err "frontend PutParameter 未限 release/frontend"
 fi
 
 # 8) backend 写方限 release/* 与 lambda-*
-if awk '/aws_iam_role_policy" "gha_backend"/,/^}/' "$TF" | grep -q 'release/\*'; then
+if grep -q 'release/\*' <<< "$(block gha_backend)"; then
   ok "backend 写方含 release/*"
 else
   err "backend 写方缺少 release/*"
 fi
 
 # 9) lambda-role Cognito 段：动作逐一列举、限本池、含删除用户与自助改密所需动作
-LAMBDA_BLOCK=$(awk '/aws_iam_role_policy" "lambda_execution"/,/^}/' "$TF")
+LAMBDA_BLOCK=$(block lambda_execution)
 if echo "$LAMBDA_BLOCK" | grep -q '"cognito-idp:\*"'; then
   err "lambda-role 使用 cognito-idp:*（必须逐一列举）"
 else

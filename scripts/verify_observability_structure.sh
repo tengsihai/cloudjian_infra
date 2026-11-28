@@ -73,7 +73,7 @@ assert_alarm publish_failed period 300
 assert_alarm publish_failed evaluation_periods 1
 assert_alarm publish_failed threshold 0
 
-if awk '/metric_alarm" "publish_failed"/,/^}/' "$TF" | grep -q 'namespace\s*=\s*"CloudJian/PublishFailed"'; then
+if grep -q 'namespace[[:space:]]*=[[:space:]]*"CloudJian/PublishFailed"' <<< "$(awk '/metric_alarm" "publish_failed"/,/^}/' "$TF")"; then
   ok "publish-failed 命名空间 = CloudJian/PublishFailed"
 else
   err "publish-failed 命名空间不是 CloudJian/PublishFailed"
@@ -81,7 +81,7 @@ fi
 
 missing_nb=""
 for a in api_5xx cdn_5xx conflict_412 job_running share_revoked publish_failed; do
-  awk "/metric_alarm\" \"$a\"/,/^}/" "$TF" | grep -q 'treat_missing_data\s*=\s*"notBreaching"' || missing_nb="$missing_nb $a"
+  grep -q 'treat_missing_data[[:space:]]*=[[:space:]]*"notBreaching"' <<< "$(awk "/metric_alarm\" \"$a\"/,/^}/" "$TF")" || missing_nb="$missing_nb $a"
 done
 if [[ -z "$missing_nb" ]]; then
   ok "六条告警均 notBreaching"
@@ -100,7 +100,7 @@ if grep -q 'metric_name         = "5xx"' "$TF" && grep -q 'NoteConflict412' "$TF
 else
   err "412 未独立"
 fi
-if awk '/metric_alarm" "api_5xx"/,/^}/' "$TF" | grep -qE 'NoteConflict412|JobRunning|ShareRevoked'; then
+if grep -qE 'NoteConflict412|JobRunning|ShareRevoked' <<< "$(awk '/metric_alarm" "api_5xx"/,/^}/' "$TF")"; then
   err "api_5xx 告警混入业务计数"
 else
   ok "api_5xx 只盯 AWS/ApiGateway 5xx"
