@@ -1,7 +1,7 @@
 # cloudjian_infra — 云笺基础设施工程
 
 > 设计依据：infra 文档与共同文档（见文末「文档」）。
-> **全部门文档入口（新人先读）**：[../docs/infra/README.md](../docs/infra/README.md)（infra 文档）；共同文档在 [`../docs/共同文档/`](../docs/共同文档/)
+> **全部门文档入口（新人先读）**（私有仓 `cloudjian_docs`）：[infra 文档](https://github.com/tengsihai/cloudjian_docs/blob/main/infra/README.md)、[共同文档](https://github.com/tengsihai/cloudjian_docs/tree/main/共同文档)
 > **只创建资源与校验脚本，不创建 Lambda/Layer，不部署 VPC，不 `s3 sync` 前端产物。**
 
 ## 仓库结构
@@ -26,7 +26,7 @@ cloudjian_infra/
 └── .github/workflows/       # 流水线
 ```
 
-infra 文档与共同文档不在本仓库内，位于工作区 `../docs/`（[infra](../docs/infra/README.md)、[共同文档](../docs/共同文档/)）。
+infra 文档与共同文档不在本仓库内，位于私有仓 [cloudjian_docs](https://github.com/tengsihai/cloudjian_docs)（[infra](https://github.com/tengsihai/cloudjian_docs/blob/main/infra/README.md)、[共同文档](https://github.com/tengsihai/cloudjian_docs/tree/main/共同文档)）。
 
 ## 首次搭建
 
@@ -67,7 +67,7 @@ terraform plan
 | `user-pool-id` / `client-id` | frontend、backend |
 | `bucket` | backend、frontend |
 | `lambda-exec-role-arn` / `api-id` | backend |
-| 其它 | 先查 [05-SSM参数总线](../docs/infra/05-SSM参数总线.md) §1 的「读取方」列 |
+| 其它 | 先查 [05-SSM参数总线](https://github.com/tengsihai/cloudjian_docs/blob/main/infra/05-SSM参数总线.md) §1 的「读取方」列 |
 
 前后端 CI **第一步**校验所需参数存在，缺失即失败并提示「请先执行 infra 流水线」。
 
@@ -139,8 +139,8 @@ terraform plan
 
 | 文档 | 用途 |
 |-|-|
-| [infra 文档目录](../docs/infra/README.md) | 资源清单、网关、CDN、认证、SSM、流水线、调度告警、运维 |
-| [01-项目总览](../docs/共同文档/01-项目总览.md) | 范围与角色 |
-| [02-技术架构](../docs/共同文档/02-技术架构.md) | 契约真源（§10 部署、§11 安全） |
-| [03-需求文档](../docs/共同文档/03-需求文档.md) | 功能与验收标准 |
-| [04-接口文档](../docs/共同文档/04-接口文档.md) | 路由/错误码 |
+| [infra 文档目录](https://github.com/tengsihai/cloudjian_docs/blob/main/infra/README.md) | 资源清单、网关、CDN、认证、SSM、流水线、调度告警、运维 |
+| [01-项目总览](https://github.com/tengsihai/cloudjian_docs/blob/main/共同文档/01-项目总览.md) | 范围与角色 |
+| [02-技术架构](https://github.com/tengsihai/cloudjian_docs/blob/main/共同文档/02-技术架构.md) | 契约真源（§10 部署、§11 安全） |
+| [03-需求文档](https://github.com/tengsihai/cloudjian_docs/blob/main/共同文档/03-需求文档.md) | 功能与验收标准 |
+| [04-接口文档](https://github.com/tengsihai/cloudjian_docs/blob/main/共同文档/04-接口文档.md) | 路由/错误码 |
