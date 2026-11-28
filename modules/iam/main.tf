@@ -690,7 +690,7 @@ resource "aws_iam_role_policy" "scheduler" {
 # ————————————————————————————— 维护函数角色 —————————————————————————————
 # docs/backend/功能设计/45-维护任务 §6：只接受 EventBridge 触发，执行角色不授予
 # 写笔记与写图片的权限。所以 maintenance 单列角色：只读网关/Lambda 元数据，
-# 只写「共享给我」收件箱这一个对象。
+# 只写「共享给我」收件箱与 users/*/search/ 下的段合并产物。
 
 resource "aws_iam_role" "maintenance" {
   name = "${var.project}-maintenance-role"
@@ -762,11 +762,24 @@ resource "aws_iam_role_policy" "maintenance" {
         }
       },
       {
-        # 唯一允许写的东西：反向索引收件箱
-        Sid      = "WriteShareInbox"
+        # daily_reconcile 的唯一写目标：反向索引收件箱。
+        # 整表重建走「写临时 key → copy 替换 → 删临时 key」，所以临时 key 也要
+        # Put/Delete；DeleteObject 只落到 .tmp，正式对象由 copy 覆盖。
+        Sid    = "WriteShareInbox"
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:DeleteObject"]
+        Resource = [
+          "${var.data_bucket_arn}/users/_share_inbox.parquet",
+          "${var.data_bucket_arn}/users/_share_inbox.parquet.tmp",
+        ]
+      },
+      {
+        # daily_index_check 段合并：回放段写 base 分片、写 compaction 水位、删已合并段。
+        # 只到 search/ 前缀；正文（notes/）与图片（assets/）仍不可写。
+        Sid      = "WriteSearchIndex"
         Effect   = "Allow"
-        Action   = ["s3:PutObject"]
-        Resource = "${var.data_bucket_arn}/users/_share_inbox.parquet"
+        Action   = ["s3:PutObject", "s3:DeleteObject"]
+        Resource = "${var.data_bucket_arn}/users/*/search/*"
       },
       {
         Sid    = "Logs"

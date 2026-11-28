@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 结构校验：三角色 sub 精确匹配、terraform 角色无 lambda:*、
-# PassRole 限定、lambda-role 不含 deploy/*、scheduler 仅 maintenance:live。
+# PassRole 限定、lambda-role 不含 deploy/*、scheduler 仅 maintenance:live、
+# maintenance 写动作只到收件箱与 users/*/search/。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -145,6 +146,41 @@ if echo "$LAMBDA_BLOCK" | grep -q 'LambdaSelfInvoke'; then
 else
   err "缺少 LambdaSelfInvoke（异步任务靠自调用续跑）"
 fi
+
+# 12) maintenance 角色：写动作只到收件箱（含 .tmp）与 users/*/search/，正文/图片不可写
+python - "$TF" <<'PY' || FAIL=1
+import re
+import sys
+
+src = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r'aws_iam_role_policy" "maintenance".*?\n}\n', src, re.S)
+if not m:
+    print("FAIL: 缺少 maintenance 策略块", file=sys.stderr)
+    sys.exit(1)
+allowed = {
+    "${var.data_bucket_arn}/users/_share_inbox.parquet",
+    "${var.data_bucket_arn}/users/_share_inbox.parquet.tmp",
+    "${var.data_bucket_arn}/users/*/search/*",
+}
+writes = {"s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion"}
+bad = []
+seen = set()
+for stmt in re.split(r'\n\s*Sid\s*=\s*"', m.group(0))[1:]:
+    actions = set(re.findall(r'"(s3:[A-Za-z]+)"', stmt)) & writes
+    if not actions:
+        continue
+    seen |= actions
+    for res in re.findall(r'"(\$\{var\.data_bucket_arn\}[^"]*)"', stmt):
+        if res not in allowed:
+            bad.append(res)
+if bad:
+    print("FAIL: maintenance 写动作越界:", sorted(set(bad)), file=sys.stderr)
+    sys.exit(1)
+if not {"s3:PutObject", "s3:DeleteObject"} <= seen:
+    print("FAIL: maintenance 写动作不全（收件箱/段合并需 Put + Delete）", file=sys.stderr)
+    sys.exit(1)
+print("  ok: maintenance 写动作仅收件箱与 users/*/search/*")
+PY
 
 if [[ "$FAIL" -ne 0 ]]; then
   echo "verify_iam_structure: FAILED" >&2
