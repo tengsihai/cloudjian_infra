@@ -1,0 +1,29 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+tfplan-*.out
+
+# 变量文件可能含敏感值，只入库 example
+*.tfvars
+!*.tfvars.example
+
+# 本地工具输出
+.terraform.d/
+checkov-report.json
+tflint.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

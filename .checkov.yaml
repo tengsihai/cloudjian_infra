@@ -1,0 +1,64 @@
+# checkov 配置 — 云笺的安全检查取舍（每条都写明理由，不接受无理由放宽）
+framework:
+  - terraform
+
+# 交付校验：无高危失败；下列为已拍板的取舍，逐条写明原因
+skip-check:
+  # —— S3 ——
+  # 单区域东京部署，无跨区容灾需求（成本模型不含 CRR）
+  - CKV_AWS_144
+  # 加密用 SSE-S3（AES256），不上 KMS：内部工具，省掉 KMS 管理面与费用
+  - CKV_AWS_145
+  # 不使用 S3 事件通知：异步任务走 EventBridge Scheduler + 函数内部 job
+  - CKV2_AWS_62
+  # 访问日志桶不开 Versioning：日志只追加、30 天过期即可；数据桶与状态桶都已开
+  - CKV_AWS_21
+  # 日志桶允许 ACL 归属（BucketOwnerPreferred）：CloudFront 标准日志用 ACL 写入，
+  # 公共访问块四项仍全 true；数据桶保持 BucketOwnerEnforced
+  - CKV2_AWS_65
+
+  # —— CloudFront ——
+  # 不做地理限制：100 人内部工具，无合规区域封锁需求
+  - CKV_AWS_374
+  # 不做源站故障转移：单一 S3 源，没有第二个源可切
+  - CKV_AWS_310
+  # 不挂 WAF：网关侧也没有 WAF，$5 预算装不下
+  - CKV_AWS_68
+  - CKV2_AWS_47
+  # 用 *.cloudfront.net 默认证书：本期不配自定义域名/ACM
+  - CKV2_AWS_42
+  # 默认证书（*.cloudfront.net）下最低协议只能是 TLSv1（AWS 限制）；
+  # 接入自有域名 + ACM 证书后再提 TLSv1.2_2021
+  - CKV_AWS_174
+  # 响应头：安全头由网关 CORS + 前端 meta 承担，不在 CDN 注入
+  - CKV2_AWS_32
+
+  # —— IAM ——
+  # terraform 角色是管理面角色（显式列举 cloudjian-*）；CloudFront/CE 等
+  # 服务在资源创建前没有稳定 ARN，CE 标签操作本身只支持 *。已收窄：角色 ARN 前缀、
+  # 桶 ARN 显式列举、APIGW 区域限定、SSM 前缀、日志组前缀、scheduler 组前缀。
+  # 凭证暴露/权限管理类检查针对「给用户放 admin」，这里是 CI 服务角色。
+  - CKV_AWS_287
+  - CKV_AWS_289
+  - CKV_AWS_290
+  - CKV_AWS_355
+  # 日志保留 30 天（非 1 年）：审计 JSON 同组，S3 侧另有 30 天访问日志
+  - CKV_AWS_338
+
+  # —— API Gateway ——
+  # infra 只建网关基础配置（无 route/integration）；N8 匿名与其余 JWT 由 backend 注册时保证
+  # （硬性约束 1/2 归 backend CI）；verify_apigw_shell 校验 infra 不建路由
+  - CKV_AWS_309
+  # 访问日志组不做 KMS：与 S3 同口径（成本模型不含 KMS；CKV_AWS_145 已同因跳过）
+  - CKV_AWS_158
+
+  # —— SSM ——
+  # 参数总线不存业务数据/机密（桶名、域名、ID、ARN）；用 Standard 免费类型，
+  # 不上 SecureString（省掉 KMS 管理面与费用，与 SSE-S3 同口径）
+  - CKV2_AWS_34
+
+  # —— Scheduler / SNS ——
+  # 不上 CMK：告警主题只含告警元数据、调度 input 只有任务名；与 SSE-S3 同
+  # 成本口径，省掉管理面
+  - CKV_AWS_26
+  - CKV_AWS_297

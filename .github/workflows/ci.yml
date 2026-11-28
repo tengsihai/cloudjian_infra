@@ -1,0 +1,146 @@
+# PR 校验 + plan 摘要
+# feat/* → PR：lint（无凭证）→ plan（有凭证，environment: release）→ 摘要贴评论
+# 禁 pull_request_target；Action 全部按 commit SHA 锁。
+name: ci
+
+on:
+  pull_request:
+    branches: [release]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+
+permissions:
+  contents: read
+  pull-requests: write # 贴 plan 摘要
+  id-token: write # OIDC 取临时凭证
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  # —— 纯 lint：不声明 environment（这一步不需要凭证）——
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive
+
+      - name: terraform validate
+        run: terraform init -backend=false -input=false && terraform validate
+
+      - name: Setup tflint
+        uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: latest
+
+      - name: tflint
+        run: |
+          tflint --init
+          tflint --recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: checkov
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          pip install checkov==3.2.331
+          checkov -d . --framework terraform --quiet --compact --config-file .checkov.yaml
+
+      - name: structure gates
+        run: |
+          bash scripts/verify_static.sh
+          bash scripts/verify_lifecycle_structure.sh
+          bash scripts/verify_apigw_shell.sh
+          bash scripts/verify_iam_structure.sh
+          bash scripts/verify_cognito_structure.sh
+          bash scripts/verify_ssm_structure.sh
+          bash scripts/verify_scheduler_structure.sh
+          bash scripts/verify_observability_structure.sh
+          bash scripts/verify_ci_structure.sh
+
+  # —— plan：需要 AWS 凭证，必须 environment: release ——
+  plan:
+    needs: lint
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@45666896f5d8e0f10ae255413f3a4cdd03bdc8f5 # v6.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ap-northeast-1
+
+      - name: terraform init + workspace
+        run: |
+          terraform init -input=false
+          terraform workspace select tokyo || terraform workspace new tokyo
+
+      - name: terraform plan
+        run: terraform plan -input=false -out=tfplan -no-color
+
+      - name: Plan summary (resource counts only)
+        id: summary
+        run: |
+          terraform show -json tfplan > plan.json
+          python scripts/plan_summary.py plan.json | tee summary.md
+          {
+            echo "summary<<EOF"
+            cat summary.md
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment plan summary on PR
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('summary.md', 'utf8');
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const marker = '<!-- cloudjian-tf-plan-summary -->';
+            const text = `${marker}\n### Terraform plan 摘要\n\n${body}\n\n_只含资源计数，不含策略内容_`;
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: text,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: text,
+              });
+            }
