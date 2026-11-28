@@ -387,7 +387,10 @@ resource "aws_iam_role_policy" "gha_terraform" {
         }
       },
       {
-        # 数据桶 + 状态桶（ARN 显式列举；无日志桶）
+        # 数据桶 + 状态桶 + 待销毁的日志桶（ARN 显式列举）
+        # 日志桶已从 storage 删除，但线上可能仍有该桶待 destroy：
+        # 按名收窄列入 ManageBuckets，否则删 lifecycle 时 PutLifecycleConfiguration 403；
+        # 桶不存在时该 ARN 无副作用。
         Sid    = "ManageBuckets"
         Effect = "Allow"
         Action = [
@@ -416,6 +419,9 @@ resource "aws_iam_role_policy" "gha_terraform" {
           "${var.data_bucket_arn}/*",
           "arn:${local.partition}:s3:::${var.project}-tfstate-tokyo",
           "arn:${local.partition}:s3:::${var.project}-tfstate-tokyo/*",
+          # 残留日志桶：仅用于 CI destroy（storage 已不管理该桶）
+          "arn:${local.partition}:s3:::${var.project}-s3-logs-tokyo",
+          "arn:${local.partition}:s3:::${var.project}-s3-logs-tokyo/*",
         ]
       },
       {
