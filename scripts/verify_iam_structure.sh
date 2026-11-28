@@ -24,9 +24,9 @@ import sys
 src = open(sys.argv[1], encoding="utf-8").read()
 found = sorted(set(re.findall(r'"repo:[^"]*:environment:release"', src)))
 allowed = sorted({
-    '"repo:tengsihai/cloudjian-%s:environment:release"' % r for r in ("frontend", "backend", "infra")
+    '"repo:tengsihai/cloudjian_%s:environment:release"' % r for r in ("frontend", "backend", "infra")
 } | {
-    '"repo:tengsihai@*/cloudjian-%s@*:environment:release"' % r for r in ("frontend", "backend", "infra")
+    '"repo:tengsihai@*/cloudjian_%s@*:environment:release"' % r for r in ("frontend", "backend", "infra")
 })
 if found != allowed:
     print("FAIL: sub 形式不符（多出或缺失）:", [p for p in found if p not in allowed] or "缺失",

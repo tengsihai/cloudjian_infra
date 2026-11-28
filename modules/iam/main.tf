@@ -20,16 +20,16 @@ locals {
   # repo:org@<owner_id>/repo@<repo_id>:environment:release；老仓库仍是
   # repo:org/repo:environment:release。两种形式都放行，用 StringLike 匹配。
   sub_frontend_patterns = [
-    "repo:tengsihai/cloudjian-frontend:environment:release",
-    "repo:tengsihai@*/cloudjian-frontend@*:environment:release",
+    "repo:tengsihai/cloudjian_frontend:environment:release",
+    "repo:tengsihai@*/cloudjian_frontend@*:environment:release",
   ]
   sub_backend_patterns = [
-    "repo:tengsihai/cloudjian-backend:environment:release",
-    "repo:tengsihai@*/cloudjian-backend@*:environment:release",
+    "repo:tengsihai/cloudjian_backend:environment:release",
+    "repo:tengsihai@*/cloudjian_backend@*:environment:release",
   ]
   sub_terraform_patterns = [
-    "repo:tengsihai/cloudjian-infra:environment:release",
-    "repo:tengsihai@*/cloudjian-infra@*:environment:release",
+    "repo:tengsihai/cloudjian_infra:environment:release",
+    "repo:tengsihai@*/cloudjian_infra@*:environment:release",
   ]
 
   # 函数清单归 backend；infra 只保留固定别名与 maintenance 名

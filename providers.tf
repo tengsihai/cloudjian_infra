@@ -5,7 +5,7 @@ provider "aws" {
     tags = {
       Project     = "cloudjian"
       ManagedBy   = "terraform"
-      Repository  = "cloudjian-infra"
+      Repository  = "cloudjian_infra"
       Environment = "release"
     }
   }

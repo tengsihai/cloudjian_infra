@@ -23,7 +23,7 @@ fi
 
 # —— 硬性约束 5 Lambda 资源 ——
 if grep -RInE --include='*.tf' 'aws_lambda_(function|layer_version|alias|permission)\b' "$ROOT"; then
-  err "TF 中出现 Lambda 资源；Lambda 全生命周期归 cloudjian-backend"
+  err "TF 中出现 Lambda 资源；Lambda 全生命周期归 cloudjian_backend"
 else
   ok "无 aws_lambda_* 资源（add-permission 亦归 backend）"
 fi

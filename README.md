@@ -1,4 +1,4 @@
-# cloudjian-infra — 云笺基础设施工程
+# cloudjian_infra — 云笺基础设施工程
 
 > 设计依据：infra 文档与共同文档（见文末「文档」）。
 > **全部门文档入口（新人先读）**：[../docs/infra/README.md](../docs/infra/README.md)（infra 文档）；共同文档在 [`../docs/共同文档/`](../docs/共同文档/)
@@ -7,7 +7,7 @@
 ## 仓库结构
 
 ```text
-cloudjian-infra/
+cloudjian_infra/
 ├── main.tf / providers.tf / backend.tf / variables.tf   # 单环境根配置（workspace=tokyo）
 ├── network.tf                                           # 网络装配入口（空）
 ├── modules/
