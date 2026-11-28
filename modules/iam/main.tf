@@ -16,12 +16,21 @@ locals {
   # GHA OIDC 账号提供方（三仓共用一个 provider，角色用 sub 区分）
   oidc_provider_arn = "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:oidc-provider/token.actions.githubusercontent.com"
 
-  # 若仓库为 2026-07-15 后新建且启用 immutable subject claims，
-  # sub 形如 repo:org@id/repo@id:environment:release —— 以下三个变量改为实测值。
-  # 实测方法：在目标仓库跑一次带 environment 的 job，值取自该 job 的 OIDC token（或 CloudTrail 里的 subject）。
-  sub_frontend  = "repo:tengsihai/cloudjian-frontend:environment:release"
-  sub_backend   = "repo:tengsihai/cloudjian-backend:environment:release"
-  sub_terraform = "repo:tengsihai/cloudjian-infra:environment:release"
+  # 2026-07 起 GitHub 在新仓库上启用 immutable subject，sub 形如
+  # repo:org@<owner_id>/repo@<repo_id>:environment:release；老仓库仍是
+  # repo:org/repo:environment:release。两种形式都放行，用 StringLike 匹配。
+  sub_frontend_patterns = [
+    "repo:tengsihai/cloudjian-frontend:environment:release",
+    "repo:tengsihai@*/cloudjian-frontend@*:environment:release",
+  ]
+  sub_backend_patterns = [
+    "repo:tengsihai/cloudjian-backend:environment:release",
+    "repo:tengsihai@*/cloudjian-backend@*:environment:release",
+  ]
+  sub_terraform_patterns = [
+    "repo:tengsihai/cloudjian-infra:environment:release",
+    "repo:tengsihai@*/cloudjian-infra@*:environment:release",
+  ]
 
   # 函数清单归 backend；infra 只保留固定别名与 maintenance 名
   lambda_alias         = "live"
@@ -52,7 +61,9 @@ resource "aws_iam_role" "gha_frontend" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = local.sub_frontend
+        }
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = local.sub_frontend_patterns
         }
       }
     }]
@@ -131,7 +142,9 @@ resource "aws_iam_role" "gha_backend" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = local.sub_backend
+        }
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = local.sub_backend_patterns
         }
       }
     }]
@@ -277,7 +290,9 @@ resource "aws_iam_role" "gha_terraform" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = local.sub_terraform
+        }
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = local.sub_terraform_patterns
         }
       }
     }]

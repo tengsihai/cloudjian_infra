@@ -11,19 +11,28 @@ ok()  { echo "  ok: $*"; }
 
 [[ -f "$TF" ]] || { err "缺少 $TF"; exit 1; }
 
-# 1) 三条 sub 必须是 environment 口径，禁止 StringLike
-grep -c 'StringEquals' "$TF" | grep -q '^[3-9]' \
-  && ok "三个角色均用 StringEquals" || err "角色信任策略未全部使用 StringEquals"
-if grep -q 'StringLike' "$TF"; then
-  # SourceArn 的 ArnLike 允许；但 sub 不得 StringLike
-  if grep -n 'token.actions.githubusercontent.com:sub' -A1 "$TF" | grep -q 'StringLike'; then
-    err "sub 使用了 StringLike（公开仓不可冒用前提被打破）"
-  else
-    ok "sub 未用 StringLike（ArnLike 仅用于 SourceArn）"
-  fi
-else
-  ok "无 StringLike"
-fi
+# 1) 三条 sub 必须是 environment 口径；sub 用 StringLike，但只允许两种锚定形式：
+#    老仓库 repo:org/repo:environment:release；immutable subject repo:org@id/repo@id:...
+python - "$TF" <<'PY' || FAIL=1
+import re
+import sys
+
+src = open(sys.argv[1], encoding="utf-8").read()
+found = sorted(set(re.findall(r'"repo:[^"]*:environment:release"', src)))
+allowed = sorted({
+    '"repo:tengsihai/cloudjian-%s:environment:release"' % r for r in ("frontend", "backend", "infra")
+} | {
+    '"repo:tengsihai@*/cloudjian-%s@*:environment:release"' % r for r in ("frontend", "backend", "infra")
+})
+if found != allowed:
+    print("FAIL: sub 形式不符（多出或缺失）:", [p for p in found if p not in allowed] or "缺失",
+          file=sys.stderr)
+    sys.exit(1)
+if "pull_request" in src:
+    print("FAIL: sub 出现了 pull_request 口径", file=sys.stderr)
+    sys.exit(1)
+print("  ok: 三条 sub 仅 environment 口径，含 immutable subject 两种形式")
+PY
 
 # 2) terraform 角色不得出现 lambda:* 动作
 if awk '/aws_iam_role_policy" "gha_terraform"/,/^}/' "$TF" | grep -qE '"lambda:[A-Z]'; then
