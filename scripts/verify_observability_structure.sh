@@ -116,11 +116,13 @@ grep -qE 'default\s*=\s*5\b' "$ROOT/modules/observability/variables.tf" \
   && ok "预算默认 5 USD" || err "budget_monthly_usd 默认不是 5"
 grep -q 'time_unit\s*=\s*"MONTHLY"' "$TF" \
   && ok "预算周期 = 月" || err "预算 time_unit 不是 MONTHLY"
-for tag in Project Component Environment ManagedBy; do
-  if grep -q "tag_key  = \"$tag\"" "$TF" || grep -q "tag_key = \"$tag\"" "$TF"; then
-    ok "成本标签 ${tag}"
+# 标签键必须先出现在账单里才能激活，故由变量给集合而非硬编码四条
+grep -q 'for_each = toset(var.cost_allocation_tag_keys)' "$TF"   && ok "成本标签由变量集合驱动" || err "成本标签未按变量集合生成"
+for tag in Project Environment ManagedBy; do
+  if grep -q "\"$tag\"" "$ROOT/modules/observability/variables.tf"; then
+    ok "成本标签默认含 ${tag}"
   else
-    err "缺成本标签 ${tag}"
+    err "成本标签默认缺 ${tag}"
   fi
 done
 

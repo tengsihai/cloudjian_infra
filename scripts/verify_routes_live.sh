@@ -20,7 +20,7 @@ ROUTES_JSON=$(aws apigatewayv2 get-routes --api-id "$API_ID" --region "$REGION")
 python - "$ROUTES_JSON" "$AUTHORIZER_ID" "${SNAPSHOT:-}" <<'PY'
 import json, sys
 
-routes = json.loads(sys.argv[1])
+routes = json.loads(sys.argv[1]).get("Items", [])
 authorizer_id = sys.argv[2]
 snapshot_path = sys.argv[3] if len(sys.argv) > 3 else ""
 

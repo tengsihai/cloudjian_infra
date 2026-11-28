@@ -50,6 +50,15 @@ resource "aws_s3_bucket" "logs" {
   bucket = "${local.name}-s3-logs-tokyo"
 }
 
+# CloudFront 标准日志写入走 ACL（log-delivery-write），日志桶需允许 ACL；
+# 只放开 ACL 归属，公共访问块四项仍全 true。
+resource "aws_s3_bucket_ownership_controls" "logs" {
+  bucket = aws_s3_bucket.logs.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
 resource "aws_s3_bucket_public_access_block" "logs" {
   bucket = aws_s3_bucket.logs.id
 
@@ -121,10 +130,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
       noncurrent_days           = 7
       newer_noncurrent_versions = 3
     }
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = 7
-    }
   }
 
   # 档 2：导出 ZIP —— 1 天
@@ -142,15 +147,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
     expiration {
       days = 1
     }
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = 7
-    }
   }
 
   # 桶级兜底：无标签对象（正文、index.parquet、shards、_refs、jobs…）
   # 非当前版本 7 天 + 只留 3 份 + 删除标记过期 + 未完成分片 7 天
   # 注：expired_object_delete_marker 为布尔属性，与 expiration 块互斥（只清删除标记的规则不设 expiration）
+  # 注：abort_incomplete_multipart_upload 不能出现在带 tag 过滤的规则里（S3 限制），
+  #     所以只放在这条无过滤的规则中，对全桶生效。
   rule {
     id     = "bucket-fallback-noncurrent"
     status = "Enabled"

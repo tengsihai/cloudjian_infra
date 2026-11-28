@@ -216,24 +216,13 @@ resource "aws_budgets_budget" "monthly" {
 }
 
 # ————————————————————————————— Cost Allocation Tags —————————————————————————————
-# 不激活则账单无法按项目归集
+# 不激活则账单无法按项目归集。
+# 注意：标签键必须先出现在账单里（资源打标后约 24 小时）才能激活，
+# 所以激活集合由变量控制，`Component` 等新键等首批账单出来后再加。
 
-resource "aws_ce_cost_allocation_tag" "project" {
-  tag_key = "Project"
-  status  = "Active"
-}
+resource "aws_ce_cost_allocation_tag" "tags" {
+  for_each = toset(var.cost_allocation_tag_keys)
 
-resource "aws_ce_cost_allocation_tag" "component" {
-  tag_key = "Component"
-  status  = "Active"
-}
-
-resource "aws_ce_cost_allocation_tag" "environment" {
-  tag_key = "Environment"
-  status  = "Active"
-}
-
-resource "aws_ce_cost_allocation_tag" "managed_by" {
-  tag_key = "ManagedBy"
+  tag_key = each.value
   status  = "Active"
 }

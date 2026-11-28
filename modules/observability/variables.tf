@@ -34,3 +34,9 @@ variable "budget_alert_emails" {
   default     = []
 }
 
+variable "cost_allocation_tag_keys" {
+  description = "要激活的成本分配标签键；键必须已出现在账单里（资源打标后约 24 小时）才能激活"
+  type        = list(string)
+  default     = ["Project", "Environment", "ManagedBy"]
+}
+

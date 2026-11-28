@@ -26,10 +26,12 @@ resource "aws_cognito_user_pool" "main" {
     case_sensitive = true
   }
 
+  # username 是登录标识本身，天然必填；schema 里只能 required = false
+  # （Cognito 不支持必填自定义属性），3–64 长度由 admin-api 校验
   schema {
     name                = "username"
     attribute_data_type = "String"
-    required            = true
+    required            = false
     mutable             = false
     string_attribute_constraints {
       min_length = 3
@@ -56,9 +58,10 @@ resource "aws_cognito_user_pool_client" "app" {
   ]
 
   # Token 有效期（小时）：Access/Id 各 20h；流程上无 RefreshToken
-  access_token_validity  = 20
-  id_token_validity      = 20
-  refresh_token_validity = 1 # 字段必填但 flows 未开 refresh，客户端拿不到
+  access_token_validity = 20
+  id_token_validity     = 20
+  # Cognito 要求 refresh >= access/id，故同为 20h；flows 未开 refresh，不会签发 refresh token
+  refresh_token_validity = 20
 
   token_validity_units {
     access_token  = "hours"

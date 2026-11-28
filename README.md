@@ -103,9 +103,9 @@ terraform plan
 - 平台告警清单：API 5xx、CF 5xx%、412 冲突、JOB_RUNNING、SHARE_REVOKED、PublishFailed
 - **JOB_RUNNING / SHARE_REVOKED 走 backend EMF 指标**（namespace `CloudJian`），不计入 5xx 口径
 - Budgets：`cloudjian` $5/月，ACTUAL 80%/100%（有邮箱才挂通知）
-- Cost Allocation Tags：`Project` / `Component` / `Environment` / `ManagedBy` Active
+- Cost Allocation Tags：默认激活 `Project` / `Environment` / `ManagedBy`；`Component` 等首批资源打标后约 24 小时（账单里出现该键）再加入 `cost_allocation_tag_keys`
 
-实测：`./scripts/verify_p08_live.sh`（apply 后）
+实测：`./scripts/verify_observability_live.sh`（apply 后）
 
 
 ## 流水线
