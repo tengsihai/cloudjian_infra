@@ -29,8 +29,7 @@ else
 fi
 
 # —— 硬性约束 3 生命周期不得使用任何 prefix（trash/、exports/ 等同样禁止）——
-# 只看 lifecycle 配置块；S3 访问日志的 target_prefix 是日志落点，不在此列
-# （CloudFront 已不写标准日志，无 cloudfront/ 前缀）
+# 只看 lifecycle 配置块；当前无 S3 桶 logging（不建日志桶）
 LIFECYCLE_HITS=""
 while IFS= read -r f; do
   if awk '/aws_s3_bucket_lifecycle_configuration/,/^}/' "$f" | grep -nE '\bprefix\s*='; then

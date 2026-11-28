@@ -13,11 +13,6 @@ variable "data_bucket_arn" {
   type        = string
 }
 
-variable "logs_bucket_arn" {
-  description = "访问日志桶 ARN"
-  type        = string
-}
-
 variable "cdn_distribution_arn" {
   description = "CloudFront 分发 ARN（invalidation 限定）"
   type        = string

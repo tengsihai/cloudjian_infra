@@ -11,12 +11,11 @@ skip-check:
   - CKV_AWS_145
   # 不使用 S3 事件通知：异步任务走 EventBridge Scheduler + 函数内部 job
   - CKV2_AWS_62
-  # 访问日志桶不开 Versioning：日志只追加、30 天过期即可；数据桶与状态桶都已开
+  # 不建 S3 访问日志（无日志桶、无 aws_s3_bucket_logging）：CloudFront/S3
+  # 访问日志均不落 S3（成本取舍）；可观测走 CloudWatch 指标与网关访问日志组。
+  # 因此无「日志桶 Versioning / BucketOwnerPreferred」相关放宽。
+  - CKV_AWS_18
   - CKV_AWS_21
-  # 日志桶允许 ACL 归属（BucketOwnerPreferred）：数据桶服务器访问日志用
-  # log-delivery-write ACL 写入；公共访问块四项仍全 true；数据桶保持 BucketOwnerEnforced。
-  # CloudFront 标准日志不再写入日志桶（成本取舍，见 modules/cdn）
-  - CKV2_AWS_65
 
   # —— CloudFront ——
   # 不做地理限制：100 人内部工具，无合规区域封锁需求
@@ -33,6 +32,9 @@ skip-check:
   - CKV_AWS_174
   # 响应头：安全头由网关 CORS + 前端 meta 承担，不在 CDN 注入
   - CKV2_AWS_32
+  # 不配 CloudFront 标准访问日志（logging_config）：落 S3 只增存储/请求成本；
+  # CDN CDN 观测走 CloudWatch 5xx 告警（见 modules/cdn）
+  - CKV_AWS_86
 
   # —— IAM ——
   # terraform 角色是管理面角色（显式列举 cloudjian-*）；CloudFront/CE 等
@@ -43,7 +45,7 @@ skip-check:
   - CKV_AWS_289
   - CKV_AWS_290
   - CKV_AWS_355
-  # 日志保留 30 天（非 1 年）：审计 JSON 同组，S3 侧另有 30 天访问日志
+  # 日志保留 30 天（非 1 年）：审计 JSON 与网关访问日志同口径
   - CKV_AWS_338
 
   # —— API Gateway ——
