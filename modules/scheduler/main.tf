@@ -66,7 +66,8 @@ resource "aws_scheduler_schedule" "this" {
 
     # task 由 maintenance 按 type 分发；不塞业务数据
     input = jsonencode({
-      source   = "eventbridge-scheduler"
+      # maintenance 只认 aws.events（45-维护任务 §2 入参校验），其它取值直接拒绝执行
+      source   = "aws.events"
       task     = each.value.task
       schedule = each.key
     })

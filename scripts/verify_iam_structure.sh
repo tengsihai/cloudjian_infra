@@ -92,11 +92,16 @@ else
   err "frontend PutParameter 未限 release/frontend"
 fi
 
-# 8) backend 写方限 release/* 与 lambda-*
-if grep -q 'release/\*' <<< "$(block gha_backend)"; then
-  ok "backend 写方含 release/*"
+# 8) backend 写方限自己那条 release/backend（单一写方，不得碰 archive/frontend）
+if grep -q 'release/backend' <<< "$(block gha_backend)"; then
+  ok "backend 写方限 release/backend"
 else
-  err "backend 写方缺少 release/*"
+  err "backend 写方缺少 release/backend"
+fi
+if grep -q 'release/\*' <<< "$(block gha_backend)"; then
+  err "backend 写方出现 release/* 通配（会覆盖 archive/frontend）"
+else
+  ok "backend 写方无 release/* 通配"
 fi
 
 # 9) lambda-role Cognito 段：动作逐一列举、限本池、含删除用户与自助改密所需动作

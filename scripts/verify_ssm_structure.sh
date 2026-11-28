@@ -15,10 +15,11 @@ ok()  { echo "  ok: $*"; }
 
 [[ -f "$SSM" ]] || { err "缺少 $SSM"; exit 1; }
 
-# —— 参数全表（infra 写入 11 条 + release/archive）——
+# —— 参数全表（infra 写入 12 条 + release/archive）——
 REQUIRED_KEYS=(
   bucket cdn-domain cdn-arn api-url user-pool-id client-id
   region lambda-exec-role-arn lambda-alias api-id jwt-authorizer-id
+  maintenance-role-arn
 )
 for k in "${REQUIRED_KEYS[@]}"; do
   if grep -qE "^\s+${k//./\\.}\s*=" "$SSM" || grep -q "\"${k}\"" "$SSM" || grep -qE "^\s+${k}\s*=" "$SSM"; then
@@ -59,11 +60,17 @@ if grep -q 'parameter/cloudjian/\*"' <<< "$(awk '/gha_frontend/,/^}/' "$IAM")"; 
   # 允许 GetParameter 整前缀，但 Put 语句不得用通配
   :
 fi
-# backend Put：release/* 与 lambda-*
-if grep -q 'parameter/cloudjian/release/\*' "$IAM" && grep -q 'parameter/cloudjian/lambda-\*' "$IAM"; then
-  ok "backend Put 限 release/* + lambda-*"
+# backend Put：只到自己那条 release/backend 与 lambda-*（单一写方）
+if grep -q 'parameter/cloudjian/release/backend' "$IAM" && grep -q 'parameter/cloudjian/lambda-\*' "$IAM"; then
+  ok "backend Put 限 release/backend + lambda-*"
 else
   err "backend SSM Put 范围不符合矩阵"
+fi
+# 不允许 release/* 通配（会顺带覆盖 archive 与 frontend）
+if grep -q 'parameter/cloudjian/release/\*' "$IAM"; then
+  err "存在 release/* 通配 Put（违反单一写方）"
+else
+  ok "无 release/* 通配 Put"
 fi
 # terraform 角色管理整个前缀（含 archive）
 if grep -q 'parameter/cloudjian/\*' "$IAM"; then

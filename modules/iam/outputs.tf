@@ -21,3 +21,7 @@ output "gha_backend_role_arn" {
 output "gha_terraform_role_arn" {
   value = aws_iam_role.gha_terraform.arn
 }
+
+output "maintenance_role_arn" {
+  value = aws_iam_role.maintenance.arn
+}

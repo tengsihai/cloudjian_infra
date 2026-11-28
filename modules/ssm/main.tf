@@ -1,6 +1,6 @@
 # SSM 参数总线
 # 前缀 /cloudjian/<key>，单环境无 env 段；Standard 类型（免费、非机密）。
-# 单一写方：本模块写 11 条 infra 参数 + release/archive 占位；
+# 单一写方：本模块写 12 条 infra 参数 + release/archive 占位；
 # release/backend、release/frontend 由各仓 CI 写，infra 不得创建。
 
 locals {
@@ -17,6 +17,7 @@ locals {
     lambda-alias         = var.lambda_alias
     api-id               = var.api_id
     jwt-authorizer-id    = var.jwt_authorizer_id
+    maintenance-role-arn = var.maintenance_role_arn
   }
 }
 

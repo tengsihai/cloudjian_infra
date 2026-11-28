@@ -16,4 +16,5 @@ module "ssm" {
   lambda_alias         = "live"
   api_id               = module.apigw.api_id
   jwt_authorizer_id    = module.apigw.authorizer_id
+  maintenance_role_arn = module.iam.maintenance_role_arn
 }
