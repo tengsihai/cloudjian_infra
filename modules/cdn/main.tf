@@ -141,12 +141,8 @@ resource "aws_cloudfront_distribution" "cdn" {
     minimum_protocol_version = "TLSv1"
   }
 
-  # 标准访问日志 → 数据桶同款日志桶（免费额度外只付存储）
-  logging_config {
-    include_cookies = false
-    bucket          = var.logs_bucket_domain_name
-    prefix          = "cloudfront/"
-  }
+  # 不配标准访问日志（logging_config）：落 S3 只增存储/请求成本，
+  # CDN 观测走 CloudWatch 指标（5xx 告警）与网关访问日志即可。
 
   tags = {
     Component = "cdn"

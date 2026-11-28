@@ -14,7 +14,6 @@ LIFECYCLE_TF="$ROOT/modules/storage/main.tf"
 [[ -f "$LIFECYCLE_TF" ]] || { err "缺少 $LIFECYCLE_TF"; exit 1; }
 
 # 1) 生命周期规则内不得出现 prefix 过滤
-#    （排除 aws_s3_bucket_logging 的 target_prefix——那是访问日志目标，不是生命周期）
 if awk '/aws_s3_bucket_lifecycle_configuration/,/^}/' "$LIFECYCLE_TF" \
   | grep -nE '(^|[^_])prefix\s*='; then
   err "生命周期使用 prefix 过滤；必须用 cj:retention 标签"
@@ -46,14 +45,21 @@ grep -q 'expired_object_delete_marker' "$LIFECYCLE_TF" \
 grep -q 'abort_incomplete_multipart_upload' "$LIFECYCLE_TF" \
   && ok "未完成分片中止已配置" || err "缺少 abort_incomplete_multipart_upload"
 
-# 5) BPA + Versioning + 加密 + 访问日志
+# 5) BPA + Versioning + 加密（无日志桶/无桶 logging——成本取舍）
 for res in aws_s3_bucket_public_access_block aws_s3_bucket_versioning \
-           aws_s3_bucket_server_side_encryption_configuration aws_s3_bucket_logging; do
+           aws_s3_bucket_server_side_encryption_configuration; do
   grep -q "resource \"$res\"" "$LIFECYCLE_TF" \
     && ok "$res 存在" || err "缺少 $res"
 done
 
-# 6) 数据桶名与文档一致
+# 6) 不得出现日志桶或桶 logging（成本取舍，见 docs/infra/03）
+if grep -qE 'aws_s3_bucket" "logs"|aws_s3_bucket_logging|s3-logs-tokyo' "$LIFECYCLE_TF"; then
+  err "出现日志桶或 aws_s3_bucket_logging；当前口径为不建日志桶"
+else
+  ok "无日志桶/无桶 logging"
+fi
+
+# 7) 数据桶名与文档一致
 grep -q 'data-tokyo' "$LIFECYCLE_TF" \
   && ok "数据桶名 cloudjian-data-tokyo" || err "数据桶名不符"
 

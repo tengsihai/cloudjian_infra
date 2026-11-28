@@ -6,7 +6,6 @@ module "cdn" {
 
   project                          = var.project
   data_bucket_regional_domain_name = module.storage.data_bucket_regional_domain_name
-  logs_bucket_domain_name          = "${module.storage.logs_bucket_id}.s3.amazonaws.com"
 }
 
 # 二段式：storage 提供桶，cdn 提供分发；桶策略在根上组装以避免模块循环

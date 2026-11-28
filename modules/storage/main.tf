@@ -1,5 +1,6 @@
 # 桶与生命周期
-# - 数据桶：BPA、Versioning、加密、标签生命周期、访问日志
+# - 数据桶：BPA、Versioning、加密、标签生命周期
+# - 无日志桶（成本取舍：S3/CloudFront 访问日志均不落 S3，可观测走 CloudWatch）
 # - 状态桶由 scripts/bootstrap_state.sh 创建（不进本状态，避免自举循环）
 # - 生命周期一律 cj:retention 标签过滤，禁止 prefix（字面匹配命中 0 个不报错）
 
@@ -43,62 +44,6 @@ resource "aws_s3_bucket_ownership_controls" "data" {
   rule {
     object_ownership = "BucketOwnerEnforced"
   }
-}
-
-# 访问日志：独立日志桶，保留 30 天（日志桶不放业务数据）
-resource "aws_s3_bucket" "logs" {
-  bucket = "${local.name}-s3-logs-tokyo"
-}
-
-# CloudFront 标准日志写入走 ACL（log-delivery-write），日志桶需允许 ACL；
-# 只放开 ACL 归属，公共访问块四项仍全 true。
-resource "aws_s3_bucket_ownership_controls" "logs" {
-  bucket = aws_s3_bucket.logs.id
-  rule {
-    object_ownership = "BucketOwnerPreferred"
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "logs" {
-  bucket = aws_s3_bucket.logs.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
-  bucket = aws_s3_bucket.logs.id
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "logs" {
-  bucket = aws_s3_bucket.logs.id
-
-  rule {
-    id     = "expire-access-logs-30d"
-    status = "Enabled"
-
-    expiration {
-      days = 30
-    }
-
-    # 日志桶无版本控制时无需 Noncurrent 规则
-    abort_incomplete_multipart_upload {
-      days_after_initiation = 7
-    }
-  }
-}
-
-resource "aws_s3_bucket_logging" "data" {
-  bucket        = aws_s3_bucket.data.id
-  target_bucket = aws_s3_bucket.logs.id
-  target_prefix = "data/"
 }
 
 # ————————————————————————————— 生命周期（标签，不用前缀） —————————————————————————————

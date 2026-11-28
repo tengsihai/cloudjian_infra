@@ -387,7 +387,7 @@ resource "aws_iam_role_policy" "gha_terraform" {
         }
       },
       {
-        # 数据桶 + 状态桶 + 日志桶（ARN 显式列举）
+        # 数据桶 + 状态桶（ARN 显式列举；无日志桶）
         Sid    = "ManageBuckets"
         Effect = "Allow"
         Action = [
@@ -414,8 +414,6 @@ resource "aws_iam_role_policy" "gha_terraform" {
         Resource = [
           var.data_bucket_arn,
           "${var.data_bucket_arn}/*",
-          var.logs_bucket_arn,
-          "${var.logs_bucket_arn}/*",
           "arn:${local.partition}:s3:::${var.project}-tfstate-tokyo",
           "arn:${local.partition}:s3:::${var.project}-tfstate-tokyo/*",
         ]
