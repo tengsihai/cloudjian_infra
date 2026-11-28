@@ -29,11 +29,9 @@ function handler(event) {
 
   function forbid() {
     return {
-      status: "403",
+      statusCode: 403,
       statusDescription: "Forbidden",
-      headers: {
-        "content-type": [{ key: "Content-Type", value: "text/plain" }]
-      }
+      headers: { "content-type": { value: "text/plain" } }
     };
   }
 
@@ -138,7 +136,9 @@ resource "aws_cloudfront_distribution" "cdn" {
 
   viewer_certificate {
     cloudfront_default_certificate = true
-    minimum_protocol_version       = "TLSv1.2_2021"
+    # CloudFront 默认证书（*.cloudfront.net）只接受 TLSv1；
+    # 接入自有域名 + ACM 证书后才可提到 TLSv1.2_2021
+    minimum_protocol_version = "TLSv1"
   }
 
   # 标准访问日志 → 数据桶同款日志桶（免费额度外只付存储）

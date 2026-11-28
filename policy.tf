@@ -39,6 +39,23 @@ resource "aws_s3_bucket_policy" "data_cloudfront" {
             "AWS:SourceArn" = module.cdn.distribution_arn
           }
         }
+      },
+      # CloudFront 对缺失对象要回 404（而不是 403），需要按前缀查一次 ListBucket；
+      # 前缀严格限定在白名单内，不引入桶列表能力。
+      {
+        Sid       = "AllowCloudFrontListPublicPrefixes"
+        Effect    = "Allow"
+        Principal = { Service = "cloudfront.amazonaws.com" }
+        Action    = "s3:ListBucket"
+        Resource  = [module.storage.data_bucket_arn]
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = module.cdn.distribution_arn
+          }
+          StringLike = {
+            "s3:prefix" = ["web/*", "users/*/assets/public/*"]
+          }
+        }
       }
     ]
   })
