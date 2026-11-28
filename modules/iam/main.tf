@@ -281,11 +281,14 @@ resource "aws_iam_role_policy" "gha_backend" {
         Resource = "*"
       },
       {
-        # 精确到 lambda-role
-        Sid      = "PassLambdaRole"
-        Effect   = "Allow"
-        Action   = ["iam:PassRole"]
-        Resource = aws_iam_role.lambda_execution.arn
+        # 精确到 lambda-role：业务函数共用 lambda_execution，维护函数用 maintenance
+        Sid    = "PassLambdaRole"
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = [
+          aws_iam_role.lambda_execution.arn,
+          aws_iam_role.maintenance.arn,
+        ]
         Condition = {
           StringEquals = {
             "iam:PassedToService" = "lambda.amazonaws.com"
