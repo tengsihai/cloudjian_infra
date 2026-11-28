@@ -355,6 +355,9 @@ resource "aws_iam_role_policy" "gha_terraform" {
           "s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket",
           "s3:GetObjectVersion", "s3:PutObjectAcl", "s3:GetObjectAcl",
           "s3:PutBucketAcl", "s3:GetBucketAcl",
+          # 刷新（plan）时 terraform 会逐个读桶属性：网站配置、请求付款、加速、
+          # 复制、对象锁、通知等，逐条列举容易漏，这里放开到 GetBucket*
+          "s3:GetBucket*", "s3:GetAccelerateConfiguration", "s3:ListBucket*",
         ]
         Resource = [
           var.data_bucket_arn,
@@ -398,6 +401,7 @@ resource "aws_iam_role_policy" "gha_terraform" {
           "logs:DeleteMetricFilter", "logs:DescribeMetricFilters", "logs:PutSubscriptionFilter",
           "logs:DeleteSubscriptionFilter", "logs:TagResource", "logs:UntagResource",
           "logs:PutLogEvents", "logs:CreateLogStream", "logs:DescribeLogStreams",
+          "logs:ListTagsForResource", "logs:ListTagsLogGroup",
         ]
         Resource = [
           "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/cloudjian-*",
@@ -413,10 +417,17 @@ resource "aws_iam_role_policy" "gha_terraform" {
         Effect = "Allow"
         Action = [
           "ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath",
-          "ssm:PutParameter", "ssm:DeleteParameter", "ssm:DescribeParameters",
+          "ssm:PutParameter", "ssm:DeleteParameter",
           "ssm:LabelParameterVersion", "ssm:RemoveTagsFromResource", "ssm:AddTagsToResource",
         ]
         Resource = "arn:${local.partition}:ssm:${var.region}:${local.account_id}:parameter/cloudjian*"
+      },
+      {
+        # DescribeParameters 是账号级动作，不接受参数 ARN，只能给 *
+        Sid      = "DescribeParamsAccountLevel"
+        Effect   = "Allow"
+        Action   = ["ssm:DescribeParameters"]
+        Resource = "*"
       },
       {
         Sid      = "ManageBudgets"
@@ -433,6 +444,7 @@ resource "aws_iam_role_policy" "gha_terraform" {
           "scheduler:DeleteSchedule", "scheduler:ListSchedules",
           "scheduler:CreateScheduleGroup", "scheduler:DeleteScheduleGroup", "scheduler:GetScheduleGroup",
           "scheduler:ListScheduleGroups", "scheduler:TagResource", "scheduler:UntagResource",
+          "scheduler:ListTagsForResource",
         ]
         Resource = [
           "arn:${local.partition}:scheduler:${var.region}:${local.account_id}:schedule-group/${var.project}-*",
@@ -445,7 +457,7 @@ resource "aws_iam_role_policy" "gha_terraform" {
         Effect = "Allow"
         Action = [
           "cloudwatch:PutMetricAlarm", "cloudwatch:DeleteAlarms", "cloudwatch:DescribeAlarms",
-          "cloudwatch:TagResource", "cloudwatch:UntagResource",
+          "cloudwatch:TagResource", "cloudwatch:UntagResource", "cloudwatch:ListTagsForResource",
           "cloudwatch:PutMetricData",
         ]
         Resource = [
@@ -460,7 +472,7 @@ resource "aws_iam_role_policy" "gha_terraform" {
         Action = [
           "sns:CreateTopic", "sns:DeleteTopic", "sns:GetTopicAttributes", "sns:SetTopicAttributes",
           "sns:Subscribe", "sns:Unsubscribe", "sns:ListSubscriptionsByTopic", "sns:Publish",
-          "sns:TagResource", "sns:UntagResource",
+          "sns:TagResource", "sns:UntagResource", "sns:ListTagsForResource",
         ]
         Resource = [
           "arn:${local.partition}:sns:${var.region}:${local.account_id}:cloudjian-*",
