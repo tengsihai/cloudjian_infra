@@ -13,6 +13,9 @@ skip-check:
   - CKV2_AWS_62
   # 访问日志桶不开 Versioning：日志只追加、30 天过期即可；数据桶与状态桶都已开
   - CKV_AWS_21
+  # 日志桶允许 ACL 归属（BucketOwnerPreferred）：CloudFront 标准日志用 ACL 写入，
+  # 公共访问块四项仍全 true；数据桶保持 BucketOwnerEnforced
+  - CKV2_AWS_65
 
   # —— CloudFront ——
   # 不做地理限制：100 人内部工具，无合规区域封锁需求
@@ -24,8 +27,8 @@ skip-check:
   - CKV2_AWS_47
   # 用 *.cloudfront.net 默认证书：本期不配自定义域名/ACM
   - CKV2_AWS_42
-  # 已设 minimum_protocol_version=TLSv1.2_2021；checkov 对 default_certificate
-  # 组合仍判失败（不认该写法），以 TF 配置为准
+  # 默认证书（*.cloudfront.net）下最低协议只能是 TLSv1（AWS 限制）；
+  # 接入自有域名 + ACM 证书后再提 TLSv1.2_2021
   - CKV_AWS_174
   # 响应头：安全头由网关 CORS + 前端 meta 承担，不在 CDN 注入
   - CKV2_AWS_32
