@@ -59,3 +59,8 @@ variable "jwt_authorizer_id" {
   description = "→ /cloudjian/jwt-authorizer-id（路由校验期望值）"
   type        = string
 }
+
+variable "maintenance_role_arn" {
+  description = "→ /cloudjian/maintenance-role-arn（maintenance 函数专用执行角色）"
+  type        = string
+}

@@ -299,12 +299,12 @@ resource "aws_iam_role_policy" "gha_backend" {
         Resource = "arn:${local.partition}:ssm:${var.region}:${local.account_id}:parameter/cloudjian/*"
       },
       {
-        # Y3：backend 只写 release/* 与 lambda-*，不得覆盖 infra 参数
+        # Y3：单一写方 —— backend 只写自己那条 release/backend，不得碰 archive/frontend
         Sid    = "WriteOwnParams"
         Effect = "Allow"
         Action = ["ssm:PutParameter"]
         Resource = [
-          "arn:${local.partition}:ssm:${var.region}:${local.account_id}:parameter/cloudjian/release/*",
+          "arn:${local.partition}:ssm:${var.region}:${local.account_id}:parameter/cloudjian/release/backend",
           "arn:${local.partition}:ssm:${var.region}:${local.account_id}:parameter/cloudjian/lambda-*",
         ]
       }
@@ -566,12 +566,18 @@ resource "aws_iam_role_policy" "lambda_execution" {
     Version = "2012-10-17"
     Statement = [
       {
-        # 限 users/* 与桶根 exports/*，不含 deploy/* 等其它前缀
+        # 限 users/*、桶根 publinks/* 与 exports/*，不含 deploy/* 等其它前缀
+        # DeleteObjectVersion 供「彻底删除」物理删干净（桶开了版本控制）
         Sid    = "S3UserData"
         Effect = "Allow"
-        Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
+        Action = [
+          "s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion",
+          "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts",
+        ]
         Resource = [
           "${var.data_bucket_arn}/users/*",
+          # 公开链接指针在桶根 publinks/，不在用户目录下
+          "${var.data_bucket_arn}/publinks/*",
           # 导出包在桶根 exports/，不在用户目录下
           "${var.data_bucket_arn}/exports/*",
         ]
@@ -579,11 +585,11 @@ resource "aws_iam_role_policy" "lambda_execution" {
       {
         Sid      = "S3ListUsers"
         Effect   = "Allow"
-        Action   = ["s3:ListBucket", "s3:GetBucketLocation", "s3:GetBucketTagging"]
+        Action   = ["s3:ListBucket", "s3:ListBucketVersions", "s3:GetBucketLocation", "s3:GetBucketTagging"]
         Resource = var.data_bucket_arn
         Condition = {
           StringLike = {
-            "s3:prefix" = ["users/", "users/*", "exports/", "exports/*", ""]
+            "s3:prefix" = ["users/", "users/*", "publinks/", "publinks/*", "exports/", "exports/*", ""]
           }
         }
       },
@@ -678,5 +684,102 @@ resource "aws_iam_role_policy" "scheduler" {
       Action   = ["lambda:InvokeFunction"]
       Resource = "arn:${local.partition}:lambda:${var.region}:${local.account_id}:function:${local.maintenance_function}:${local.lambda_alias}"
     }]
+  })
+}
+
+# ————————————————————————————— 维护函数角色 —————————————————————————————
+# docs/backend/功能设计/45-维护任务 §6：只接受 EventBridge 触发，执行角色不授予
+# 写笔记与写图片的权限。所以 maintenance 单列角色：只读网关/Lambda 元数据，
+# 只写「共享给我」收件箱这一个对象。
+
+resource "aws_iam_role" "maintenance" {
+  name = "${var.project}-maintenance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "maintenance" {
+  name = "${var.project}-maintenance"
+  role = aws_iam_role.maintenance.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # weekly_contract：读路由清单，与 43 条比对
+        Sid    = "ReadApiMetadata"
+        Effect = "Allow"
+        Action = ["apigateway:GET"]
+        Resource = [
+          "arn:${local.partition}:apigateway:${var.region}::/apis/${var.api_id}",
+          "arn:${local.partition}:apigateway:${var.region}::/apis/${var.api_id}/*",
+        ]
+      },
+      {
+        # weekly_contract：查 45 个函数的别名与版本
+        Sid    = "ReadLambdaMetadata"
+        Effect = "Allow"
+        Action = [
+          "lambda:GetFunction", "lambda:GetFunctionConfiguration", "lambda:GetAlias",
+          "lambda:ListAliases", "lambda:ListVersionsByFunction", "lambda:ListTags",
+        ]
+        Resource = [
+          "arn:${local.partition}:lambda:${var.region}:${local.account_id}:function:${var.project}-*",
+          "arn:${local.partition}:lambda:${var.region}:${local.account_id}:function:${var.project}-*:*",
+        ]
+      },
+      {
+        # weekly_contract：读两个 Layer 的最新版本 ARN
+        Sid      = "ReadLayerMetadata"
+        Effect   = "Allow"
+        Action   = ["lambda:ListLayerVersions", "lambda:GetLayerVersion"]
+        Resource = "arn:${local.partition}:lambda:${var.region}:${local.account_id}:layer:${var.project}-*"
+      },
+      {
+        # daily_reconcile 读 shares/ 与注册表；daily_index_check 只读抽查
+        Sid      = "ReadUserData"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${var.data_bucket_arn}/users/*"
+      },
+      {
+        # 有 List 才拿得到 404 与目录枚举
+        Sid      = "ListUsers"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = var.data_bucket_arn
+        Condition = {
+          StringLike = {
+            "s3:prefix" = ["users/", "users/*"]
+          }
+        }
+      },
+      {
+        # 唯一允许写的东西：反向索引收件箱
+        Sid      = "WriteShareInbox"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "${var.data_bucket_arn}/users/_share_inbox.parquet"
+      },
+      {
+        Sid    = "Logs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents",
+          "logs:DescribeLogStreams", "logs:TagLogGroup",
+        ]
+        Resource = [
+          "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/${local.maintenance_function}",
+          "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/${local.maintenance_function}:*",
+        ]
+      },
+    ]
   })
 }

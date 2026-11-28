@@ -73,8 +73,8 @@ grep -q '"Asia/Tokyo"' "$ROOT/modules/scheduler/variables.tf" \
 for k in source task schedule; do
   grep -q "^\s*$k\s*=" "$TF" || err "input 缺字段 $k"
 done
-grep -q 'source   = "eventbridge-scheduler"' "$TF" \
-  && ok "input 含 source/task/schedule" || err "input.source 不是 eventbridge-scheduler"
+grep -q 'source   = "aws.events"' "$TF" \
+  && ok "input 含 source/task/schedule" || err "input.source 不是 aws.events（45-维护任务 §2）"
 
 # 调度组名匹配 IAM SourceArn cloudjian-*
 if grep -q 'schedule-group/${var.project}-\*' "$IAM" || grep -q 'schedule-group/cloudjian-\*' "$IAM"; then
