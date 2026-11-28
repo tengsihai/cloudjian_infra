@@ -107,7 +107,7 @@ else
   ok "Cognito 未使用通配动作"
 fi
 for act in GetUser AdminGetUser AdminUserGlobalSignOut AdminCreateUser AdminAddUserToGroup \
-           AdminRemoveUserFromGroup AdminDisableUser AdminEnableUser AdminResetPassword AdminDeleteUser \
+           AdminRemoveUserFromGroup AdminDisableUser AdminEnableUser AdminSetUserPassword AdminDeleteUser \
            ChangePassword; do
   if ! echo "$LAMBDA_BLOCK" | grep -q "\"cognito-idp:$act\""; then
     err "Cognito 动作缺 cognito-idp:$act"

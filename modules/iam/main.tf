@@ -566,7 +566,8 @@ resource "aws_iam_role_policy" "lambda_execution" {
         ]
       },
       {
-        # Cognito 11 动作，逐一列举限本池（AdminDeleteUser 供删除用户收尾，ChangePassword 供自助改密）
+        # Cognito 11 动作，逐一列举限本池（AdminDeleteUser 供删除用户收尾，ChangePassword 供自助改密，
+        # AdminSetUserPassword 供管理员重置密码：Permanent=false → 下次登录强制改密）
         Sid    = "Cognito"
         Effect = "Allow"
         Action = [
@@ -578,7 +579,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
           "cognito-idp:AdminRemoveUserFromGroup",
           "cognito-idp:AdminDisableUser",
           "cognito-idp:AdminEnableUser",
-          "cognito-idp:AdminResetPassword",
+          "cognito-idp:AdminSetUserPassword",
           "cognito-idp:AdminDeleteUser",
           "cognito-idp:ChangePassword",
         ]
