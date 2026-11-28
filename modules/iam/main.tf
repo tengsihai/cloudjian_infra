@@ -186,7 +186,10 @@ resource "aws_iam_role_policy" "gha_backend" {
           "lambda:UpdateFunctionCode",
           "lambda:UpdateFunctionConfiguration",
           "lambda:PublishVersion",
+          "lambda:CreateAlias",
           "lambda:UpdateAlias",
+          "lambda:DeleteAlias",
+          "lambda:ListTags",
           "lambda:AddPermission",
           "lambda:RemovePermission",
           "lambda:GetPolicy",
@@ -262,7 +265,7 @@ resource "aws_iam_role_policy" "gha_backend" {
         Sid    = "FunctionLogs"
         Effect = "Allow"
         Action = [
-          "logs:CreateLogGroup", "logs:PutRetentionPolicy",
+          "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy",
           "logs:TagLogGroup", "logs:TagResource",
         ]
         Resource = [
