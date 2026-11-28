@@ -52,28 +52,38 @@ else:
     ok("N8 = NONE 且无 authorizer")
 
 # 其余业务路由：JWT + authorizer_id 一致（N8 之外不允许 NONE）
+# 与 04-接口文档 40 条逐条对齐（N8 单独校验，其余 39 条必须 JWT）
 expected_jwt = [
     "GET /notes", "POST /notes",
     "GET /notes/{note_id}", "PUT /notes/{note_id}", "DELETE /notes/{note_id}",
-    "POST /trash/purge",
-    "GET /notes/{note_id}/versions",
-    "POST /notes/{note_id}/versions/{ts}/restore",
-    "GET /search", "GET /dirs", "POST /dirs/move",
+    "POST /trash/purge", "POST /notes/{note_id}/visibility",
+    "GET /notes/{note_id}/versions", "GET /notes/{note_id}/versions/{ts}",
+    "POST /notes/{note_id}/versions/{ts}/restore", "DELETE /notes/{note_id}/versions/{ts}",
+    "GET /search", "GET /dirs", "POST /dirs", "PATCH /dirs", "DELETE /dirs",
+    "POST /dirs/move", "POST /dirs/restore",
     "GET /shares", "POST /shares", "DELETE /shares/{share_id}",
     "POST /assets/presign", "POST /assets/register",
-    "GET /assets/{asset_id}/url", "POST /assets/urls",
+    "GET /assets/{asset_id}/url", "POST /assets/urls", "GET /assets",
     "GET /admin/users", "POST /admin/users", "PATCH /admin/users/{sub}",
-    "DELETE /admin/users/{sub}",
-    "POST /admin/users/{sub}/reset",
-    "POST /exports", "GET /exports/{job_id}",
-    "POST /notes/{note_id}/visibility",
-    "POST /profile/password",
+    "DELETE /admin/users/{sub}", "POST /admin/users/{sub}/reset",
+    "GET /admin/team-config", "PUT /admin/team-config",
+    "POST /exports", "GET /exports/{job_id}", "GET /jobs/{job_id}",
+    "GET /profile", "PUT /profile", "POST /profile/password",
 ]
 missing = [k for k in expected_jwt if k not in by_key]
 if missing:
     err(f"缺少路由: {missing}")
 else:
-    ok(f"核心路由齐全 ({len(expected_jwt)} 条)")
+    ok(f"路由齐全 ({len(expected_jwt)} 条 JWT + N8)")
+
+# 数量口径：接口文档共 40 条（N8 + 39 条 JWT）；新增路由须先改 docs/infra/02
+if len(expected_jwt) != 39:
+    err(f"expected_jwt 自身条数={len(expected_jwt)} (want 39)")
+non_n8 = [k for k in by_key if k not in ("GET /public/notes/{public_token}", "$default")]
+if len(non_n8) != 39:
+    err(f"实测 JWT 路由={len(non_n8)} 条 (want 39，共 40 条含 N8)")
+else:
+    ok("实测 JWT 39 条（含 N8 共 40 条）")
 
 # 全量：除 N8 外每条路由都必须 JWT 且 authorizer 与 SSM 一致
 bad = []
