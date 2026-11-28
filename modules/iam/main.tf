@@ -230,17 +230,57 @@ resource "aws_iam_role_policy" "gha_backend" {
         ]
       },
       {
+        # 函数发布走 SAM：CloudFormation 栈也归 backend 自己管，栈名限定 cloudjian-*
+        Sid    = "DeployStack"
+        Effect = "Allow"
+        Action = [
+          "cloudformation:CreateStack",
+          "cloudformation:UpdateStack",
+          "cloudformation:DeleteStack",
+          "cloudformation:DescribeStacks",
+          "cloudformation:DescribeStackEvents",
+          "cloudformation:DescribeStackResource",
+          "cloudformation:DescribeStackResources",
+          "cloudformation:ListStackResources",
+          "cloudformation:GetTemplate",
+          "cloudformation:CreateChangeSet",
+          "cloudformation:DescribeChangeSet",
+          "cloudformation:ExecuteChangeSet",
+          "cloudformation:DeleteChangeSet",
+          "cloudformation:ListChangeSets",
+          "cloudformation:TagResource",
+          "cloudformation:UntagResource",
+        ]
+        Resource = [
+          "arn:${local.partition}:cloudformation:${var.region}:${local.account_id}:stack/cloudjian-*/*",
+        ]
+      },
+      {
+        # 模板校验/汇总没有资源维度，只能放到 *
+        Sid      = "TemplateSummary"
+        Effect   = "Allow"
+        Action   = ["cloudformation:GetTemplateSummary", "cloudformation:ValidateTemplate"]
+        Resource = "*"
+      },
+      {
         # 函数由 backend 创建；日志组用 Lambda 默认组并设 30 天保留
         Sid    = "FunctionLogs"
         Effect = "Allow"
         Action = [
-          "logs:CreateLogGroup", "logs:DescribeLogGroups", "logs:PutRetentionPolicy",
+          "logs:CreateLogGroup", "logs:PutRetentionPolicy",
           "logs:TagLogGroup", "logs:TagResource",
         ]
         Resource = [
           "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/cloudjian-*",
           "arn:${local.partition}:logs:${var.region}:${local.account_id}:log-group:/aws/lambda/cloudjian-*:*",
         ]
+      },
+      {
+        # DescribeLogGroups 是列表接口，不支持资源级授权；只读元数据，不含日志内容
+        Sid      = "DescribeLogs"
+        Effect   = "Allow"
+        Action   = ["logs:DescribeLogGroups"]
+        Resource = "*"
       },
       {
         # 精确到 lambda-role
