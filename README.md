@@ -131,6 +131,7 @@ terraform plan
 - `feat/*` → PR：fmt/validate/tflint/checkov + plan 摘要（不部署）
 - `release`（PR 合入）：唯一部署环境（release 即线上）；合入前 CI 全绿
 - `main`：只打 tag + 写 `/cloudjian/release/archive`，零部署
+- **线上资源只由 `deploy.yml` apply（含第一次）**：本地可 `init` / `plan` / `verify_*`，不可 `apply` / `import` / 控制台改；唯一例外是 `scripts/bootstrap_state.sh`（只建状态桶）
 - 所有带 AWS 凭证的 job 必须声明 `environment: release`（OIDC sub 口径）
 - 分支保护：release/main 必须 PR + CI 全绿 + **Include administrators**
 

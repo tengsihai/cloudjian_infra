@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 状态桶一次性 bootstrap（本地首次 apply 前执行）。
+# 状态桶一次性 bootstrap（唯一允许本地写 AWS 的入口；之后一律走 deploy.yml apply）。
 # 创建 cloudjian-tfstate-tokyo（Versioning + BPA + 加密），幂等可重跑。
 set -euo pipefail
 
@@ -42,6 +42,8 @@ cat <<EOF
     1) terraform init   # 使用 backend.tf 中的 s3 配置
     2) terraform workspace new tokyo   # 若尚无 workspace（幂等：已存在则跳过）
     3) terraform plan
+    4) 提 PR → 合并 release，由 deploy.yml 执行 apply（含首次）
 
-    状态桶与业务桶物理分离；本脚本是唯一允许手工建桶的入口。
+    禁止本地 terraform apply / import。状态桶与业务桶物理分离；
+    本脚本是唯一允许本地写 AWS 的入口（只建状态桶）。
 EOF
