@@ -78,21 +78,14 @@ resource "aws_iam_role_policy" "gha_frontend" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "WebPrefixOnly"
-        Effect = "Allow"
-        Action = ["s3:PutObject", "s3:DeleteObject", "s3:ListBucket", "s3:GetObject"]
-        Resource = [
-          var.data_bucket_arn,
-          "${var.data_bucket_arn}/web/*",
-        ]
-        Condition = {
-          StringLike = {
-            "s3:prefix" = ["web/", "web/*"]
-          }
-        }
+        # 对象动作只能到 web/*；s3:prefix 条件只对 List 生效，套在 PutObject 上等于永远拒绝
+        Sid      = "WebPrefixOnly"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:DeleteObject", "s3:GetObject"]
+        Resource = ["${var.data_bucket_arn}/web/*"]
       },
       {
-        # ListBucket 无 prefix 条件时单独放行（AWS 要求 List 与对象动作分开）
+        # ListBucket 单独一条并限定 prefix（AWS 要求 List 与对象动作分开）
         Sid      = "ListWeb"
         Effect   = "Allow"
         Action   = ["s3:ListBucket"]
@@ -253,6 +246,8 @@ resource "aws_iam_role_policy" "gha_backend" {
         ]
         Resource = [
           "arn:${local.partition}:cloudformation:${var.region}:${local.account_id}:stack/cloudjian-*/*",
+          # SAM 的 Transform 会被当成待授权资源（账户段固定为 aws）
+          "arn:${local.partition}:cloudformation:${var.region}:aws:transform/Serverless-2016-10-31",
         ]
       },
       {
