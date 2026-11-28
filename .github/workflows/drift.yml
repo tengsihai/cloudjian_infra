@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   issues: write
+  id-token: write # OIDC 取临时凭证
 
 concurrency:
   group: drift

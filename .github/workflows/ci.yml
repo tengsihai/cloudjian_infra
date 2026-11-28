@@ -13,6 +13,7 @@ on:
 permissions:
   contents: read
   pull-requests: write # 贴 plan 摘要
+  id-token: write # OIDC 取临时凭证
 
 concurrency:
   group: ci-${{ github.event.pull_request.number }}

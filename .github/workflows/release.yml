@@ -10,6 +10,7 @@ on:
 permissions:
   contents: write # 打 tag
   pull-requests: read # gh pr list 校验合并来源
+  id-token: write # OIDC 取临时凭证
 
 concurrency:
   group: release-main

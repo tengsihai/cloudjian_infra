@@ -24,6 +24,17 @@ else
   ok "无 pull_request_target 触发"
 fi
 
+# —— 取 AWS 凭证的 workflow 必须声明 id-token: write ——
+for f in "$WF"/*.yml; do
+  if grep -q 'role-to-assume' "$f"; then
+    if awk '/^permissions:/{p=1;next} p&&/^[A-Za-z]/{p=0} p' "$f" | grep -qE 'id-token:\s*write'; then
+      ok "$(basename "$f"): 声明 id-token: write"
+    else
+      err "$(basename "$f") 用 OIDC 但未声明 id-token: write"
+    fi
+  fi
+done
+
 # 所有 uses: 必须是 owner/repo@40hex（忽略本地 action）
 BAD_USES=$(grep -RhE '^\s+uses:' "$WF" | grep -vE 'uses:\s+\./' | grep -vE 'uses:\s+[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}\s*(#.*)?$' || true)
 if [[ -n "$BAD_USES" ]]; then

@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write # OIDC 取临时凭证
 
 concurrency:
   group: state-backup
