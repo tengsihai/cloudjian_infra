@@ -13,8 +13,9 @@ skip-check:
   - CKV2_AWS_62
   # 访问日志桶不开 Versioning：日志只追加、30 天过期即可；数据桶与状态桶都已开
   - CKV_AWS_21
-  # 日志桶允许 ACL 归属（BucketOwnerPreferred）：CloudFront 标准日志用 ACL 写入，
-  # 公共访问块四项仍全 true；数据桶保持 BucketOwnerEnforced
+  # 日志桶允许 ACL 归属（BucketOwnerPreferred）：数据桶服务器访问日志用
+  # log-delivery-write ACL 写入；公共访问块四项仍全 true；数据桶保持 BucketOwnerEnforced。
+  # CloudFront 标准日志不再写入日志桶（成本取舍，见 modules/cdn）
   - CKV2_AWS_65
 
   # —— CloudFront ——

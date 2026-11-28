@@ -50,8 +50,9 @@ resource "aws_s3_bucket" "logs" {
   bucket = "${local.name}-s3-logs-tokyo"
 }
 
-# CloudFront 标准日志写入走 ACL（log-delivery-write），日志桶需允许 ACL；
+# 数据桶服务器访问日志写入走 ACL（log-delivery-write），日志桶需允许 ACL 归属；
 # 只放开 ACL 归属，公共访问块四项仍全 true。
+# （CloudFront 标准日志不再写入本桶——见 modules/cdn，避免额外 S3 成本。）
 resource "aws_s3_bucket_ownership_controls" "logs" {
   bucket = aws_s3_bucket.logs.id
   rule {
