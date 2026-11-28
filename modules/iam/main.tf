@@ -319,6 +319,9 @@ resource "aws_iam_role_policy" "gha_terraform" {
           "iam:AttachRolePolicy", "iam:DetachRolePolicy",
           "iam:CreateOpenIDConnectProvider", "iam:DeleteOpenIDConnectProvider", "iam:GetOpenIDConnectProvider",
           "iam:TagOpenIDConnectProvider", "iam:UntagOpenIDConnectProvider",
+          # 刷新时读标签用
+          "iam:ListRoleTags", "iam:ListPolicyTags", "iam:ListOpenIDConnectProviderTags",
+          "iam:ListInstanceProfilesForRole",
         ]
         Resource = [
           "arn:${local.partition}:iam::${local.account_id}:role/${var.project}-*",
@@ -358,6 +361,10 @@ resource "aws_iam_role_policy" "gha_terraform" {
           # 刷新（plan）时 terraform 会逐个读桶属性：网站配置、请求付款、加速、
           # 复制、对象锁、通知等，逐条列举容易漏，这里放开到 GetBucket*
           "s3:GetBucket*", "s3:GetAccelerateConfiguration", "s3:ListBucket*",
+          "s3:GetReplicationConfiguration", "s3:GetInventoryConfiguration",
+          "s3:GetAnalyticsConfiguration", "s3:GetMetricsConfiguration",
+          "s3:GetIntelligentTieringConfiguration", "s3:GetBucketNotification",
+          "s3:PutBucketNotification",
         ]
         Resource = [
           var.data_bucket_arn,
@@ -397,7 +404,7 @@ resource "aws_iam_role_policy" "gha_terraform" {
         Effect = "Allow"
         Action = [
           "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy",
-          "logs:DeleteRetentionPolicy", "logs:DescribeLogGroups", "logs:PutMetricFilter",
+          "logs:DeleteRetentionPolicy", "logs:PutMetricFilter",
           "logs:DeleteMetricFilter", "logs:DescribeMetricFilters", "logs:PutSubscriptionFilter",
           "logs:DeleteSubscriptionFilter", "logs:TagResource", "logs:UntagResource",
           "logs:PutLogEvents", "logs:CreateLogStream", "logs:DescribeLogStreams",
@@ -419,21 +426,22 @@ resource "aws_iam_role_policy" "gha_terraform" {
           "ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath",
           "ssm:PutParameter", "ssm:DeleteParameter",
           "ssm:LabelParameterVersion", "ssm:RemoveTagsFromResource", "ssm:AddTagsToResource",
+          "ssm:ListTagsForResource",
         ]
         Resource = "arn:${local.partition}:ssm:${var.region}:${local.account_id}:parameter/cloudjian*"
       },
       {
-        # DescribeParameters 是账号级动作，不接受参数 ARN，只能给 *
-        Sid      = "DescribeParamsAccountLevel"
+        # 账号级只读动作：不接受具体资源 ARN，只能给 *
+        Sid      = "AccountLevelReads"
         Effect   = "Allow"
-        Action   = ["ssm:DescribeParameters"]
+        Action   = ["ssm:DescribeParameters", "logs:DescribeLogGroups"]
         Resource = "*"
       },
       {
         Sid      = "ManageBudgets"
         Effect   = "Allow"
         Action   = ["budgets:*"]
-        Resource = "arn:${local.partition}:budgets:${var.region}:${local.account_id}:budget/${var.project}*"
+        Resource = "arn:${local.partition}:budgets::${local.account_id}:budget/${var.project}*"
       },
       {
         # 调度（漏了会让 apply 建调度 AccessDenied）
