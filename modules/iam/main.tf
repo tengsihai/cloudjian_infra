@@ -566,7 +566,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
     Version = "2012-10-17"
     Statement = [
       {
-        # 限 users/*、桶根 publinks/* 与 exports/*，不含 deploy/* 等其它前缀
+        # 限 users/*、桶根 publinks/*、public_index/* 与 exports/*，不含 deploy/* 等其它前缀
         # DeleteObjectVersion 供「彻底删除」物理删干净（桶开了版本控制）
         Sid    = "S3UserData"
         Effect = "Allow"
@@ -578,6 +578,8 @@ resource "aws_iam_role_policy" "lambda_execution" {
           "${var.data_bucket_arn}/users/*",
           # 公开链接指针在桶根 publinks/，不在用户目录下
           "${var.data_bucket_arn}/publinks/*",
+          # 全局公开搜索索引在桶根 public_index/（保存/删除/重建时写入）
+          "${var.data_bucket_arn}/public_index/*",
           # 导出包在桶根 exports/，不在用户目录下
           "${var.data_bucket_arn}/exports/*",
         ]
@@ -589,7 +591,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
         Resource = var.data_bucket_arn
         Condition = {
           StringLike = {
-            "s3:prefix" = ["users/", "users/*", "publinks/", "publinks/*", "exports/", "exports/*", ""]
+            "s3:prefix" = ["users/", "users/*", "publinks/", "publinks/*", "public_index/", "public_index/*", "exports/", "exports/*", ""]
           }
         }
       },
@@ -690,7 +692,7 @@ resource "aws_iam_role_policy" "scheduler" {
 # ————————————————————————————— 维护函数角色 —————————————————————————————
 # docs/backend/功能设计/45-维护任务 §6：只接受 EventBridge 触发，执行角色不授予
 # 写笔记与写图片的权限。所以 maintenance 单列角色：只读网关/Lambda 元数据，
-# 只写「共享给我」收件箱与 users/*/search/ 下的段合并产物。
+# 只写「共享给我」收件箱、users/*/search/ 与 public_index/ 下的段合并产物。
 
 resource "aws_iam_role" "maintenance" {
   name = "${var.project}-maintenance-role"
@@ -713,7 +715,7 @@ resource "aws_iam_role_policy" "maintenance" {
     Version = "2012-10-17"
     Statement = [
       {
-        # weekly_contract：读路由清单，与 43 条比对
+        # weekly_contract：读路由清单，与 44 条比对
         Sid    = "ReadApiMetadata"
         Effect = "Allow"
         Action = ["apigateway:GET"]
@@ -723,7 +725,7 @@ resource "aws_iam_role_policy" "maintenance" {
         ]
       },
       {
-        # weekly_contract：查 45 个函数的别名与版本
+        # weekly_contract：查 46 个函数的别名与版本
         Sid    = "ReadLambdaMetadata"
         Effect = "Allow"
         Action = [
@@ -743,11 +745,11 @@ resource "aws_iam_role_policy" "maintenance" {
         Resource = "arn:${local.partition}:lambda:${var.region}:${local.account_id}:layer:${var.project}-*"
       },
       {
-        # daily_reconcile 读 shares/ 与注册表；daily_index_check 只读抽查
+        # daily_reconcile 读 shares/ 与注册表；daily_index_check 只读抽查（含 public_index）
         Sid      = "ReadUserData"
         Effect   = "Allow"
         Action   = ["s3:GetObject"]
-        Resource = "${var.data_bucket_arn}/users/*"
+        Resource = ["${var.data_bucket_arn}/users/*", "${var.data_bucket_arn}/public_index/*"]
       },
       {
         # 有 List 才拿得到 404 与目录枚举
@@ -757,7 +759,7 @@ resource "aws_iam_role_policy" "maintenance" {
         Resource = var.data_bucket_arn
         Condition = {
           StringLike = {
-            "s3:prefix" = ["users/", "users/*"]
+            "s3:prefix" = ["users/", "users/*", "public_index/", "public_index/*"]
           }
         }
       },
@@ -775,11 +777,11 @@ resource "aws_iam_role_policy" "maintenance" {
       },
       {
         # daily_index_check 段合并：回放段写 base 分片、写 compaction 水位、删已合并段。
-        # 只到 search/ 前缀；正文（notes/）与图片（assets/）仍不可写。
+        # 只到 search/ 与 public_index/ 前缀；正文（notes/）与图片（assets/）仍不可写。
         Sid      = "WriteSearchIndex"
         Effect   = "Allow"
         Action   = ["s3:PutObject", "s3:DeleteObject"]
-        Resource = "${var.data_bucket_arn}/users/*/search/*"
+        Resource = ["${var.data_bucket_arn}/users/*/search/*", "${var.data_bucket_arn}/public_index/*"]
       },
       {
         Sid    = "Logs"
