@@ -132,7 +132,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
     }
   }
 
-  # 档 2：导出 ZIP —— 1 天
+  # 档 2：导出 ZIP、search/segments、public_index/segments —— 1 天（写入侧打标）
   rule {
     id     = "retention-1d"
     status = "Enabled"

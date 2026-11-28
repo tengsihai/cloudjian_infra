@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 结构校验：三角色 sub 精确匹配、terraform 角色无 lambda:*、
 # PassRole 限定、lambda-role 不含 deploy/*、scheduler 仅 maintenance:live、
-# maintenance 写动作只到收件箱与 users/*/search/。
+# maintenance 写动作只到收件箱、users/*/search/ 与 public_index/。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -147,7 +147,7 @@ else
   err "缺少 LambdaSelfInvoke（异步任务靠自调用续跑）"
 fi
 
-# 12) maintenance 角色：写动作只到收件箱（含 .tmp）与 users/*/search/，正文/图片不可写
+# 12) maintenance 角色：写动作只到收件箱（含 .tmp）、users/*/search/ 与 public_index/，正文/图片不可写
 python - "$TF" <<'PY' || FAIL=1
 import re
 import sys
@@ -161,6 +161,7 @@ allowed = {
     "${var.data_bucket_arn}/users/_share_inbox.parquet",
     "${var.data_bucket_arn}/users/_share_inbox.parquet.tmp",
     "${var.data_bucket_arn}/users/*/search/*",
+    "${var.data_bucket_arn}/public_index/*",
 }
 writes = {"s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion"}
 bad = []
@@ -179,7 +180,7 @@ if bad:
 if not {"s3:PutObject", "s3:DeleteObject"} <= seen:
     print("FAIL: maintenance 写动作不全（收件箱/段合并需 Put + Delete）", file=sys.stderr)
     sys.exit(1)
-print("  ok: maintenance 写动作仅收件箱与 users/*/search/*")
+print("  ok: maintenance 写动作仅收件箱、users/*/search/* 与 public_index/*")
 PY
 
 if [[ "$FAIL" -ne 0 ]]; then
